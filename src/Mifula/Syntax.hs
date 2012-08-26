@@ -107,8 +107,27 @@ instance ( Show (Tag Defs π)
         DefsGrouped defss ->
             showString "DefsGrouped " . showsPrec 11 defss
 
+instance Pretty (Defs π) where
+    pretty defs = case defs of
+        DefsUngrouped defs -> vcat . map pretty $ defs
+        DefsGrouped defss -> vcat . map (vcat . map pretty) $ defss
+
 data Def π = DefVar Var (Tagged Defs π) (Tagged Expr π)
            | DefFun Var [Tagged Match π]
+
+instance Pretty (Def π) where
+    pretty def = case def of
+        DefVar x locals body ->
+            text x <+> text "=" <+> pretty body
+        DefFun fun matches ->
+            vsep . map (prettyMatch fun . unTag) $ matches
+      where
+        prettyMatch fun (Match pats locals body) =
+            hsep [ text fun
+                 , hsep (map pretty pats)
+                 , text "="
+                 , pretty body
+                 ]
 
 instance ( Show (Tag Defs π)
          , Show (Tag Def π)
