@@ -266,22 +266,27 @@ instance AST Ty where
 
 instance AST Defs where
     type Tag Defs Parsed = ()
+    type Tag Defs Scoped = Tag Defs Parsed
     type Tag Defs Typed = ()
 
 instance AST Def where
     type Tag Def Parsed = SrcLoc
+    type Tag Def Scoped = Tag Def Parsed
     type Tag Def Typed = Tag Def Parsed -- TODO
 
 instance AST Match where
     type Tag Match Parsed = SrcLoc
+    type Tag Match Scoped = Tag Match Parsed
     type Tag Match Typed = Tag Match Typed -- TODO
 
 instance AST Pat where
     type Tag Pat Parsed = SrcLoc
+    type Tag Pat Scoped = Tag Pat Parsed
     type Tag Pat Typed = Tag Pat Parsed -- TODO
 
 instance AST Expr where
     type Tag Expr Parsed = SrcLoc
+    type Tag Expr Scoped = Tag Expr Parsed
     type Tag Expr Typed = Tag Expr Parsed -- TODO
 
 class HasTypeVars a where
