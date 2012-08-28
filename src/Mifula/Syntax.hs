@@ -115,6 +115,10 @@ instance Pretty (Defs π) where
 data Def π = DefVar Var (Tagged Defs π) (Tagged Expr π)
            | DefFun Var [Tagged Match π]
 
+defName :: Def π -> Var
+defName (DefVar x _ _) = x
+defName (DefFun fun _) = fun
+
 instance Pretty (Def π) where
     pretty def = case def of
         DefVar x locals body ->
