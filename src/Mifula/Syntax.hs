@@ -185,9 +185,14 @@ instance (Show (Tag Pat π)) => Show (Pat π) where
 
 instance Pretty (Pat π) where
     pretty pat = case pat of
-        PVar x -> text x
-        PCon con ps -> parens $ text con <+> hsep (map pretty ps)
-        PWildcard -> text "_"
+        PVar x ->
+            text x
+        PCon con [] ->
+            text con
+        PCon con ps ->
+            parens $ text con <+> hsep (map pretty ps)
+        PWildcard ->
+            text "_"
 
 data Expr π = EVar Var
             | ECon Con
@@ -234,11 +239,16 @@ instance Pretty (Expr π) where
 
         go :: Int -> Expr π -> Doc
         go prec e = case e of
-            EVar var -> text var
-            ECon con -> text con
-            ELam pat body -> paren lam_prec $ text "λ" <+> pretty pat <+> text "→" <+> pretty body
-            EApp f x -> paren app_prec $ goT app_prec f <+> goT (app_prec + 1) x
-            ELet defs body -> undefined -- TODO
+            EVar var ->
+                text var
+            ECon con ->
+                text con
+            ELam pat body ->
+                paren lam_prec $ text "λ" <+> pretty pat <+> text "→" <+> pretty body
+            EApp f x ->
+                paren app_prec $ goT app_prec f <+> goT (app_prec + 1) x
+            ELet defs body ->
+                undefined -- TODO
           where
             app_prec = 10
             lam_prec = 5
