@@ -24,6 +24,7 @@ scopeDefsT (T loc (DefsUngrouped defs)) = do
     defsWithNames :: [(Var, Tagged Def Parsed)]
     defsWithNames = map (defName . unTag &&& id) defs
 
+    -- TODO: check conflicting names
     newVars :: Set Var
     newVars = Set.fromList $ map fst defsWithNames
 

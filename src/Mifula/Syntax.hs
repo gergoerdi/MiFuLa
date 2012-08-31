@@ -106,6 +106,7 @@ class ScopedPass (π :: Pass)
 
 instance UnscopedPass Parsed
 instance ScopedPass Scoped
+instance ScopedPass Kinded
 instance ScopedPass Typed
 
 data Defs π where
