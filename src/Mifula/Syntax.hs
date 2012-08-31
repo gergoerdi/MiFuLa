@@ -20,6 +20,18 @@ data Pass = Parsed
 
 class AST (a :: Pass -> *) where
     type Tag a (π :: Pass)
+    type Tag a Parsed = TagParsed a
+    type Tag a Scoped = TagScoped a
+    type Tag a Typed = TagTyped a
+
+    type TagParsed a
+    type TagParsed a = SrcLoc
+
+    type TagScoped a
+    type TagScoped a = Tag a Parsed
+
+    type TagTyped a
+    type TagTyped a = SrcLoc -- TODO
 
 data Tagged :: (Pass -> *) -> Pass -> * where
     T :: AST a => { tag :: Tag a π, unTag :: a π } -> Tagged a π
@@ -260,34 +272,14 @@ data SrcLoc = SrcLoc
 instance Default SrcLoc where
     def = SrcLoc
 
-instance AST Ty where
-    type Tag Ty Parsed = SrcLoc
-    type Tag Ty Typed = Tag Ty Parsed -- TODO
-
+instance AST Ty
 instance AST Defs where
-    type Tag Defs Parsed = ()
-    type Tag Defs Scoped = Tag Defs Parsed
-    type Tag Defs Typed = ()
-
-instance AST Def where
-    type Tag Def Parsed = SrcLoc
-    type Tag Def Scoped = Tag Def Parsed
-    type Tag Def Typed = Tag Def Parsed -- TODO
-
-instance AST Match where
-    type Tag Match Parsed = SrcLoc
-    type Tag Match Scoped = Tag Match Parsed
-    type Tag Match Typed = Tag Match Typed -- TODO
-
-instance AST Pat where
-    type Tag Pat Parsed = SrcLoc
-    type Tag Pat Scoped = Tag Pat Parsed
-    type Tag Pat Typed = Tag Pat Parsed -- TODO
-
-instance AST Expr where
-    type Tag Expr Parsed = SrcLoc
-    type Tag Expr Scoped = Tag Expr Parsed
-    type Tag Expr Typed = Tag Expr Parsed -- TODO
+    type TagParsed Defs = ()
+    type TagTyped Defs = ()
+instance AST Def
+instance AST Match
+instance AST Pat
+instance AST Expr
 
 class HasTypeVars a where
     tvs :: a -> Set Tv
