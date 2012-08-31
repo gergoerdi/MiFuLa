@@ -16,12 +16,14 @@ import Text.PrettyPrint.Leijen
 
 data Pass = Parsed
           | Scoped
+          | Kinded
           | Typed
 
 class AST (a :: Pass -> *) where
     type Tag a (π :: Pass)
     type Tag a Parsed = TagParsed a
     type Tag a Scoped = TagScoped a
+    type Tag a Kinded = TagKinded a
     type Tag a Typed = TagTyped a
 
     type TagParsed a
@@ -29,6 +31,9 @@ class AST (a :: Pass -> *) where
 
     type TagScoped a
     type TagScoped a = Tag a Parsed
+
+    type TagKinded a
+    type TagKinded a = Tag a Scoped
 
     type TagTyped a
     type TagTyped a = SrcLoc -- TODO
