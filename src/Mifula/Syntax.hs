@@ -7,7 +7,7 @@ module Mifula.Syntax where
 
 import Data.Set (Set)
 import qualified Data.Set as Set
-import Control.Monad.Writer
+import Control.Monad.Writer hiding ((<>))
 import Data.Set.Unicode
 import Text.Show
 
@@ -126,8 +126,11 @@ instance ( Show (Tag Defs π)
 
 instance Pretty (Defs π) where
     pretty defs = case defs of
-        DefsUngrouped defs -> vcat . map pretty $ defs
-        DefsGrouped defss -> vcat . map (vcat . map pretty) $ defss
+        DefsUngrouped defs -> join . map pretty $ defs
+        DefsGrouped defss -> join . map (vcat . map pretty) $ defss
+      where
+        sep = line <> text "--------"
+        join = vcat . punctuate sep
 
 data Def π = DefVar Var (Tagged Defs π) (Tagged Expr π)
            | DefFun Var [Tagged Match π]
