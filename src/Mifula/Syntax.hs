@@ -8,7 +8,6 @@ module Mifula.Syntax where
 import Data.Set (Set)
 import qualified Data.Set as Set
 import Control.Monad.Writer hiding ((<>))
-import Data.Set.Unicode
 import Text.Show
 
 import Data.Default
@@ -294,7 +293,7 @@ class HasTypeVars a where
     tvs :: a -> Set Tv
 
 occurs :: (HasTypeVars a) => Tv -> a -> Bool
-occurs x ty = x ∈ tvs ty
+occurs x ty = x `Set.member` tvs ty
 
 instance HasTypeVars (Ty π) where
     tvs = execWriter . go
