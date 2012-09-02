@@ -8,16 +8,11 @@ module Mifula.Syntax
        , Id, Tv, Var, Con
        , Ty(..), Expr(..), Pat(..), Match(..), Def(..), Defs(..)
        , defName
-       , HasTypeVars(..), occurs
        , SourcePos, noPos
        ) where
 
-import Data.Set (Set)
-import qualified Data.Set as Set
-import Control.Monad.Writer hiding ((<>))
-import Text.Show
-
 import Data.Default
+import Text.Show
 import Text.PrettyPrint.Leijen
 import Text.ParserCombinators.Parsec.Pos (SourcePos, initialPos)
 
@@ -293,22 +288,6 @@ instance AST Def
 instance AST Match
 instance AST Pat
 instance AST Expr
-
-class HasTypeVars a where
-    tvs :: a -> Set Tv
-
-occurs :: (HasTypeVars a) => Tv -> a -> Bool
-occurs x ty = x `Set.member` tvs ty
-
-instance HasTypeVars (Ty π) where
-    tvs = execWriter . go
-      where
-        collect = tell . Set.singleton
-
-        go ty = case ty of
-            TyVar tv -> collect tv
-            TyApp t u -> go (unTag t) >> go (unTag u)
-            _ -> return ()
 
 infixr ~>
 (~>) :: Default (Tag Ty π) => Ty π -> Ty π -> Ty π
