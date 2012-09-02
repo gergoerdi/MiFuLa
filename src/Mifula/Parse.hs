@@ -92,14 +92,14 @@ pat needParens = pCon' <|> try pWildcard <|> pVar <|> parens (pat False)
         reservedOp "_"
         return $ PWildcard
 
-locals :: IP.IndentCharParser () (Tagged Defs Parsed)
+locals :: IP.IndentCharParser () (Defs Parsed)
 locals = do
     mlocals <- optionMaybe $ IP.block $ do
         reservedOp "where"
         IP.block $ defs
     return $ noLocals `fromMaybe` mlocals
   where
-    noLocals = T () $ DefsUngrouped []
+    noLocals = DefsUngrouped []
 
 match :: Var -> IP.IndentCharParser () (Tagged Match Parsed)
 match f = try $ loc $ do
@@ -136,10 +136,10 @@ expr = buildExpressionParser table term <?> "expression"
         defs <- IP.block $ many1 def
         reserved "in"
         body <- expr
-        return $ ELet (T () $ DefsUngrouped defs) body
+        return $ ELet (DefsUngrouped defs) body
 
-defs :: IP.IndentCharParser () (Tagged Defs Parsed)
-defs = T () . DefsUngrouped <$> many1 def
+defs :: IP.IndentCharParser () (Defs Parsed)
+defs = DefsUngrouped <$> many1 def
 
 def :: IP.IndentCharParser () (Tagged Def Parsed)
 def = loc $ try defVar <|> defFun

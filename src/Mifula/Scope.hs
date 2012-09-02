@@ -1,6 +1,6 @@
 {-# LANGUAGE DataKinds #-}
 {-# LANGUAGE GADTs #-}
-module Mifula.Scope (scopeDefsT) where
+module Mifula.Scope (scopeDefs) where
 
 import Mifula.Syntax
 import Mifula.Scope.SC
@@ -13,13 +13,12 @@ import qualified Data.Graph as G
 import Data.Set (Set)
 import qualified Data.Set as Set
 
-scopeDefsT :: Tagged Defs Parsed -> SC (Tagged Defs Scoped, Set Var)
-scopeDefsT (T loc (DefsUngrouped defs)) = do
+scopeDefs :: Defs Parsed -> SC (Defs Scoped, Set Var)
+scopeDefs (DefsUngrouped defs) = do
     edges <- forM defsWithNames $ \(name, def) -> do
         (def', refs) <- listenVars newVars $ liftTag scopeDef def
         return (def', name, Set.toList refs)
-    let grouped = DefsGrouped $ topsort $ edges
-    return (T loc grouped, newVars)
+    return (DefsGrouped $ topsort edges, newVars)
   where
     defsWithNames :: [(Var, Tagged Def Parsed)]
     defsWithNames = map (defName . unTag &&& id) defs
@@ -70,9 +69,9 @@ withPats pats f = do
     withVars (Set.unions pvarss) $ f pats'
 
 
-withDefs :: Tagged Defs Parsed -> (Tagged Defs Scoped -> SC a) -> SC a
+withDefs :: Defs Parsed -> (Defs Scoped -> SC a) -> SC a
 withDefs defs f = do
-    (defs', newVars) <- scopeDefsT defs
+    (defs', newVars) <- scopeDefs defs
     withVars newVars $ f defs'
 
 scopePat :: Pat Parsed -> SC (Pat Scoped)

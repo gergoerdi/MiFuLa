@@ -3,9 +3,10 @@
 {-# LANGUAGE GADTs #-}
 {-# LANGUAGE DataKinds, KindSignatures #-}
 {-# LANGUAGE RecordWildCards #-}
+{-# LANGUAGE ScopedTypeVariables #-}
 module Mifula.Syntax
        ( Pass(..), AST(..), Tagged(..)
-       , Id, Tv, Var, Con
+       , Id, Tv, Var, Con, TyCon
        , Ty(..), Expr(..), Pat(..), Match(..), Def(..), Defs(..)
        , defName
        , SourcePos, noPos
@@ -115,8 +116,7 @@ data Defs π where
     DefsUngrouped :: UnscopedPass π => [Tagged Def π] -> Defs π
     DefsGrouped :: ScopedPass π => [[Tagged Def π]] -> Defs π
 
-instance ( Show (Tag Defs π)
-         , Show (Tag Def π)
+instance ( Show (Tag Def π)
          , Show (Tag Expr π)
          , Show (Tag Match π)
          , Show (Tag Pat π)
@@ -135,7 +135,7 @@ instance Pretty (Defs π) where
         sep = line <> text "--------"
         join = vcat . punctuate sep
 
-data Def π = DefVar Var (Tagged Defs π) (Tagged Expr π)
+data Def π = DefVar Var (Defs π) (Tagged Expr π)
            | DefFun Var [Tagged Match π]
 
 defName :: Def π -> Var
@@ -156,7 +156,7 @@ instance Pretty (Def π) where
                  , pretty body
                  ]
 
-instance ( Show (Tag Defs π)
+instance ( Show (Defs π)
          , Show (Tag Def π)
          , Show (Tag Expr π)
          , Show (Tag Pat π)
@@ -173,12 +173,12 @@ instance ( Show (Tag Defs π)
             showsPrec 11 f . showString " " .
             showsPrec 11 matches
 
-data Match π = Match [Tagged Pat π] (Tagged Defs π) (Tagged Expr π)
+data Match π = Match [Tagged Pat π] (Defs π) (Tagged Expr π)
 
 instance ( Show (Tag Match π)
          , Show (Tag Pat π)
          , Show (Tag Expr π)
-         , Show (Tag Defs π)
+         , Show (Defs π)
          , Show (Tag Def π)
          ) => Show (Match π) where
     showsPrec prec match = showParen (prec > 10) $ case match of
@@ -221,11 +221,11 @@ data Expr π = EVar Var
             | ECon Con
             | ELam (Tagged Pat π) (Tagged Expr π)
             | EApp (Tagged Expr π) (Tagged Expr π)
-            | ELet (Tagged Defs π) (Tagged Expr π)
+            | ELet (Defs π) (Tagged Expr π)
 
 instance ( Show (Tag Expr π)
          , Show (Tag Pat π)
-         , Show (Tag Defs π)
+         , Show (Defs π)
          , Show (Tag Def π)
          , Show (Tag Match π)
          ) => Show (Expr π) where
@@ -281,9 +281,6 @@ noPos :: SourcePos
 noPos = initialPos ""
 
 instance AST Ty
-instance AST Defs where
-    type TagParsed Defs = ()
-    type TagTyped Defs = ()
 instance AST Def
 instance AST Match
 instance AST Pat

@@ -1,7 +1,7 @@
 {-# LANGUAGE DataKinds #-}
 import Mifula.Syntax
 import Mifula.Parse (defs, parseWhole)
-import Mifula.Scope (scopeDefsT)
+import Mifula.Scope (scopeDefs)
 import Mifula.Scope.SC (runSC)
 
 import qualified Text.ParserCombinators.Parsec.IndentParser as IP
@@ -17,7 +17,7 @@ import Data.Monoid
 import Prelude hiding (mapM)
 import Data.Default
 
-foo :: Tagged Defs Parsed
+foo :: Defs Parsed
 foo = parseD prog
   where
     prog = unlines [ "id x = x"
@@ -37,7 +37,8 @@ foo = parseD prog
 main = do
     print $ pretty foo
     putStrLn "--==================--"
-    let foo' = case runSC (Set.fromList ["Cons", "Nil"]) $ scopeDefsT foo of
+    let foo' = case runSC (Set.fromList ["Cons", "Nil"]) $ scopeDefs foo of
             Left err -> error $ show err
             Right (foo', _) -> foo'
     print $ pretty foo'
+    return foo'
