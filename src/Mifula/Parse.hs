@@ -45,7 +45,12 @@ varname = do name@(n:_) <- identifier
              guard $ isLower n
              return name
 
-loc p = T SrcLoc <$> p
+loc p = do
+    pos <- getPos
+    T pos <$> p
+
+getPos :: IP.IndentCharParser () SourcePos
+getPos = getPosition
 
 ty :: IP.IndentCharParser () (Tagged Ty Parsed)
 ty = buildExpressionParser table term <?> "type expression"
@@ -57,12 +62,12 @@ ty = buildExpressionParser table term <?> "type expression"
 
     tyFun = do
         arr
-        pos <- return SrcLoc -- TODO
+        pos <- getPos
         return $ \t u -> T pos $ TyApp (T pos $ TyApp (T pos TyFun) t) u
 
     tyApp = do
         -- whiteSpace
-        pos <- return SrcLoc -- TODO
+        pos <- getPos
         return $ \t u -> T pos $ TyApp t u
     tyVar = TyVar <$> varname
     tyCon = TyCon <$> conname
@@ -116,7 +121,7 @@ expr = buildExpressionParser table term <?> "expression"
     eCon = ECon <$> conname
     eApp = do
         -- whiteSpace
-        pos <- return SrcLoc -- TODO
+        pos <- getPos -- TODO
         return $ \f x -> T pos $ EApp f x
 
     eLam = do

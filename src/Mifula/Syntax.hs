@@ -3,7 +3,14 @@
 {-# LANGUAGE GADTs #-}
 {-# LANGUAGE DataKinds, KindSignatures #-}
 {-# LANGUAGE RecordWildCards #-}
-module Mifula.Syntax where
+module Mifula.Syntax
+       ( Pass(..), AST(..), Tagged(..)
+       , Id, Tv, Var, Con
+       , Ty(..), Expr(..), Pat(..), Match(..), Def(..), Defs(..)
+       , defName
+       , HasTypeVars(..), occurs
+       , SourcePos, noPos
+       ) where
 
 import Data.Set (Set)
 import qualified Data.Set as Set
@@ -12,6 +19,7 @@ import Text.Show
 
 import Data.Default
 import Text.PrettyPrint.Leijen
+import Text.ParserCombinators.Parsec.Pos (SourcePos, initialPos)
 
 data Pass = Parsed
           | Scoped
@@ -26,7 +34,7 @@ class AST (a :: Pass -> *) where
     type Tag a Typed = TagTyped a
 
     type TagParsed a
-    type TagParsed a = SrcLoc
+    type TagParsed a = SourcePos
 
     type TagScoped a
     type TagScoped a = Tag a Parsed
@@ -35,7 +43,7 @@ class AST (a :: Pass -> *) where
     type TagKinded a = Tag a Scoped
 
     type TagTyped a
-    type TagTyped a = SrcLoc -- TODO
+    type TagTyped a = Maybe SourcePos -- TODO
 
 data Tagged :: (Pass -> *) -> Pass -> * where
     T :: AST a => { tag :: Tag a π, unTag :: a π } -> Tagged a π
@@ -274,11 +282,8 @@ instance Pretty (Expr π) where
             lam_prec = 5
             paren lim = if prec > lim then parens else id
 
-data SrcLoc = SrcLoc
-            deriving Show
-
-instance Default SrcLoc where
-    def = SrcLoc
+noPos :: SourcePos
+noPos = initialPos ""
 
 instance AST Ty
 instance AST Defs where
@@ -312,13 +317,6 @@ t ~> u = TyApp (T def $ TyApp (T def $ TyFun) (T def t)) (T def u)
 infixr ~~>
 (~~>) :: Default (Tag Ty π) => Tagged Ty π -> Tagged Ty π -> Tagged Ty π
 t ~~> u = T def $ TyApp (T def $ TyApp (T def $ TyFun) t) u
-
-t :: Tagged Ty Parsed
-t = (a ~~> b) ~~> list a ~~> list b
-  where
-    list = T def . TyApp (T def $ TyCon "List")
-    a = T def $ TyVar "a"
-    b = T def $ TyVar "b"
 
 infixl @@
 (@@) :: Default (Tag Expr π) => Expr π -> Expr π -> Expr π

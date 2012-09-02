@@ -4,6 +4,7 @@ module Mifula.Scope.SC
        ( SC, runSC
        , refVar, refCon, defPVar
        , listenVars, withVars, listenPVars
+       , atPosition
        ) where
 
 import Mifula.Syntax
@@ -15,6 +16,7 @@ import Control.Applicative
 import Data.Set (Set)
 import qualified Data.Set as Set
 import Control.Arrow (first, second)
+import Data.Default
 
 data ScopeError = SEUnresolvedCon Con
                 | SEUnresolvedVar Var
@@ -23,11 +25,12 @@ data ScopeError = SEUnresolvedCon Con
 
 data R = R{ rVars :: Set Var
           , rCons :: Set Con
+          , rPos :: SourcePos
           }
 
 data W = W{ wRefs :: Set Var
           , wPVars :: Set Var
-          , wErrors :: [ScopeError]
+          , wErrors :: [(SourcePos, ScopeError)]
           }
 
 instance Monoid W where
@@ -37,7 +40,7 @@ instance Monoid W where
 newtype SC a = SC{ unSC :: ReaderT R (Writer W) a }
              deriving (Functor, Applicative, Monad)
 
-runSC :: Set Con -> SC a -> Either [ScopeError] a
+runSC :: Set Con -> SC a -> Either [(SourcePos, ScopeError)] a
 runSC cons sc = case runWriter $ runReaderT (unSC sc) r₀ of
     (x, w) -> case wErrors w of
         [] -> Right x
@@ -45,6 +48,7 @@ runSC cons sc = case runWriter $ runReaderT (unSC sc) r₀ of
   where
     r₀ = R{ rVars = mempty
           , rCons = cons
+          , rPos = noPos
           }
 
 listenVars :: Set Var -> SC a -> SC (a, Set Var)
@@ -75,8 +79,15 @@ listenPVars sc = do
     noPVars :: W -> W
     noPVars w = w{ wPVars = mempty }
 
+atPosition :: SourcePos -> SC a -> SC a
+atPosition pos = SC . local setPos . unSC
+  where
+    setPos r = r{ rPos = pos }
+
 scopeError :: ScopeError -> SC ()
-scopeError err = SC . tell $ mempty{ wErrors = [err]} -- TODO: error locations
+scopeError err = do
+    pos <- SC . asks $ rPos
+    SC . tell $ mempty{ wErrors = [(pos, err)]} -- TODO: error locations
 
 tellVar :: Var -> SC ()
 tellVar x = SC . tell $ mempty{ wRefs = Set.singleton x }

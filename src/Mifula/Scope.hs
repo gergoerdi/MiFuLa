@@ -81,8 +81,10 @@ scopePat pat = case pat of
     PCon con pats -> PCon <$> refCon con <*> mapM (liftTag scopePat) pats
     PWildcard -> return PWildcard
 
-liftTag :: (AST a, Tag a Parsed ~ Tag a Scoped)
+liftTag :: (AST a, Tag a Parsed ~ SourcePos, Tag a Scoped ~ SourcePos)
         => (a Parsed -> SC (a Scoped))
         -> Tagged a Parsed
         -> SC (Tagged a Scoped)
-liftTag f tx = T (tag tx) <$> f (unTag tx)
+liftTag f tx = T pos <$> atPosition pos (f (unTag tx))
+  where
+    pos = tag tx
