@@ -4,9 +4,10 @@
 {-# LANGUAGE DataKinds, KindSignatures #-}
 {-# LANGUAGE RecordWildCards #-}
 {-# LANGUAGE ScopedTypeVariables #-}
+{-# LANGUAGE GeneralizedNewtypeDeriving, StandaloneDeriving #-}
 module Mifula.Syntax
        ( Pass(..), AST(..), Tagged(..)
-       , Id, Tv, Var, Con, TyCon
+       , Id, Ref(..), Tv, Var, Con, TyCon
        , Ty(..), Expr(..), Pat(..), Match(..), Def(..), Defs(..)
        , defName
        , SourcePos, noPos
@@ -54,13 +55,32 @@ instance (AST a, Show (Tag a π), Show (a π)) => Show (Tagged a π) where
 instance Pretty (a π) => Pretty (Tagged a π) where
     pretty = pretty . unTag
 
-type Id = String
+newtype Id = Id{ idHash :: Int }
+           deriving (Eq, Ord, Enum, Show)
 
-type Tv = Id
-type TyCon = Id
+data Ref (π :: Pass) where
+    NameRef :: UnscopedPass π => { refName :: String } -> Ref π
+    IdRef :: ScopedPass π => {refName :: String, refID ::  Id } -> Ref π
+deriving instance Show (Ref π)
 
-data Ty π = TyCon TyCon
-          | TyVar Tv
+instance Eq (Ref π) where
+    (NameRef name) == (NameRef name') = name == name'
+    (IdRef _ x) == (IdRef _ x') = x == x'
+
+instance Ord (Ref π) where
+    (NameRef name) `compare` (NameRef name') = name `compare` name'
+    (IdRef _ x) `compare` (IdRef _ x') = x `compare` x'
+
+instance Pretty (Ref π) where
+    pretty ref = case ref of
+        NameRef s -> text s
+        IdRef s _ -> text s
+
+type Tv = Ref
+type TyCon = Ref
+
+data Ty π = TyCon (TyCon π)
+          | TyVar (Tv π)
           | TyApp (Tagged Ty π) (Tagged Ty π)
           | TyFun
 
@@ -89,8 +109,8 @@ instance Pretty (Ty π) where
 
         go :: Int -> Ty π -> Doc
         go prec ty = case ty of
-            TyCon con -> text con
-            TyVar α -> text α
+            TyCon con -> pretty con
+            TyVar α -> pretty α
             TyApp (T _ (TyApp (T _ TyFun) t)) u ->
                 paren arr_prec $ goT (arr_prec + 1) t <+> text "→" <+> goT 0 u
             TyApp t u -> paren app_prec $ goT 0 t <+> goT (app_prec + 1) u
@@ -100,9 +120,9 @@ instance Pretty (Ty π) where
             arr_prec = 5
             paren lim = if prec > lim then parens else id
 
-type Var = Id
+type Var = Ref
 
-type Con = Id
+type Con = Ref
 
 class UnscopedPass (π :: Pass)
 class ScopedPass (π :: Pass)
@@ -135,22 +155,22 @@ instance Pretty (Defs π) where
         sep = line <> text "--------"
         join = vcat . punctuate sep
 
-data Def π = DefVar Var (Defs π) (Tagged Expr π)
-           | DefFun Var [Tagged Match π]
+data Def π = DefVar (Var π) (Defs π) (Tagged Expr π)
+           | DefFun (Var π) [Tagged Match π]
 
-defName :: Def π -> Var
+defName :: Def π -> Var π
 defName (DefVar x _ _) = x
 defName (DefFun fun _) = fun
 
 instance Pretty (Def π) where
     pretty def = case def of
         DefVar x locals body ->
-            text x <+> text "=" <+> pretty body
+            pretty x <+> text "=" <+> pretty body
         DefFun fun matches ->
             vsep . map (prettyMatch fun . unTag) $ matches
       where
         prettyMatch fun (Match pats locals body) =
-            hsep [ text fun
+            hsep [ pretty fun
                  , hsep (map pretty pats)
                  , text "="
                  , pretty body
@@ -188,8 +208,8 @@ instance ( Show (Tag Match π)
             showsPrec 11 defs . showString " " .
             showsPrec 11 expr
 
-data Pat π = PVar Var
-           | PCon Con [Tagged Pat π]
+data Pat π = PVar (Var π)
+           | PCon (Con π) [Tagged Pat π]
            | PWildcard
 
 instance (Show (Tag Pat π)) => Show (Pat π) where
@@ -209,16 +229,16 @@ instance (Show (Tag Pat π)) => Show (Pat π) where
 instance Pretty (Pat π) where
     pretty pat = case pat of
         PVar x ->
-            text x
+            pretty x
         PCon con [] ->
-            text con
+            pretty con
         PCon con ps ->
-            parens $ text con <+> hsep (map pretty ps)
+            parens $ pretty con <+> hsep (map pretty ps)
         PWildcard ->
             text "_"
 
-data Expr π = EVar Var
-            | ECon Con
+data Expr π = EVar (Var π)
+            | ECon (Con π)
             | ELam (Tagged Pat π) (Tagged Expr π)
             | EApp (Tagged Expr π) (Tagged Expr π)
             | ELet (Defs π) (Tagged Expr π)
@@ -263,9 +283,9 @@ instance Pretty (Expr π) where
         go :: Int -> Expr π -> Doc
         go prec e = case e of
             EVar var ->
-                text var
+                pretty var
             ECon con ->
-                text con
+                pretty con
             ELam pat body ->
                 paren lam_prec $ text "λ" <+> pretty pat <+> text "→" <+> pretty body
             EApp f x ->

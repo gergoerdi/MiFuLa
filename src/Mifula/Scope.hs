@@ -13,29 +13,28 @@ import qualified Data.Graph as G
 import Data.Set (Set)
 import qualified Data.Set as Set
 
-scopeDefs :: Defs Parsed -> SC (Defs Scoped, Set Var)
+scopeDefs :: Defs Parsed -> SC (Defs Scoped, Set (Var Scoped))
 scopeDefs (DefsUngrouped defs) = do
+    -- TODO: check conflicting names
+    defsWithNames <- forM defs $ \def -> do
+        var <- freshVar $ defName . unTag $ def
+        return (var, def)
+    let newVars = Set.fromList $ map fst defsWithNames
+
     edges <- forM defsWithNames $ \(name, def) -> do
         (def', refs) <- listenVars newVars $ liftTag scopeDef def
         return (def', name, Set.toList refs)
     return (DefsGrouped $ topsort edges, newVars)
   where
-    defsWithNames :: [(Var, Tagged Def Parsed)]
-    defsWithNames = map (defName . unTag &&& id) defs
-
-    -- TODO: check conflicting names
-    newVars :: Set Var
-    newVars = Set.fromList $ map fst defsWithNames
-
     topsort = map G.flattenSCC . G.stronglyConnComp
 
 scopeDef :: Def Parsed -> SC (Def Scoped)
 scopeDef def = case def of
     DefVar var locals body ->
         withDefs locals $ \locals' -> do
-            DefVar var locals' <$> scopeExprT body
+            DefVar <$> defVar var <*> pure locals' <*> scopeExprT body
     DefFun fun matches ->
-        DefFun fun <$> mapM (liftTag scopeMatch) matches
+        DefFun <$> defVar fun <*> mapM (liftTag scopeMatch) matches
 
 scopeMatch :: Match Parsed -> SC (Match Scoped)
 scopeMatch (Match pats locals body) = do

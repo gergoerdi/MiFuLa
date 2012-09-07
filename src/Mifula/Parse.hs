@@ -17,6 +17,8 @@ import Data.Maybe
 
 import Control.Applicative ((<$>)) -- IndentParser uses Parsec 2, which doesn't expose an Applicative instance...
 
+type P a = IP.IndentCharParser () a
+
 lexer = T.makeTokenParser $ L.haskellStyle {
     T.reservedNames = ["let", "in", "where"],
     T.reservedOpNames = ["λ", "\\", "→", "->", "=", "_"]
@@ -34,16 +36,23 @@ reservedOp = IT.reservedOp lexer
 identifier = IT.identifier lexer
 whiteSpace = IT.whiteSpace lexer
 
+arr :: P ()
 arr = reservedOp "->" <|> reservedOp "→"
+
+lambda :: P ()
 lambda = reservedOp "\\" <|> reservedOp "λ"
 
-conname = do name@(n:_) <- identifier
-             guard $ isUpper n
-             return name
+conname :: P (Con Parsed)
+conname = do
+    name@(n:_) <- identifier
+    guard $ isUpper n
+    return $ NameRef name
 
-varname = do name@(n:_) <- identifier
-             guard $ isLower n
-             return name
+varname :: P (Var Parsed)
+varname = do
+    name@(n:_) <- identifier
+    guard $ isLower n
+    return $ NameRef name
 
 loc p = do
     pos <- getPos
@@ -101,7 +110,7 @@ locals = do
   where
     noLocals = DefsUngrouped []
 
-match :: Var -> IP.IndentCharParser () (Tagged Match Parsed)
+match :: Var Parsed -> IP.IndentCharParser () (Tagged Match Parsed)
 match f = try $ loc $ do
     f' <- varname
     guard $ f' == f

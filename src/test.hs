@@ -37,8 +37,8 @@ foo = parseD prog
 main = do
     print $ pretty foo
     putStrLn "--==================--"
-    let foo' = case runSC (Set.fromList ["Cons", "Nil"]) $ scopeDefs foo of
+    let foo' = case runSC (Set.fromList [NameRef "Cons", NameRef "Nil"]) $ scopeDefs foo of
             Left err -> error $ show err
             Right (foo', _) -> foo'
     print $ pretty foo'
-    return foo'
+    -- return foo'
