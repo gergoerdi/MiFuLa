@@ -168,11 +168,11 @@ instance Pretty (Ty π) where
         prepend [] ys = ys
 
         niceNames :: Stream String
-        niceNames = prepend preferred' failsafe
+        niceNames = Stream.filter unused $ prepend preferred failsafe
           where
             preferred = ["α", "β", "γ"] ++ map (:[]) ['a'..'z']
-            preferred' = filter (not . (`Set.member` tvNames)) preferred
-            failsafe = fmap (\i -> 't':show i) $ Stream.iterate succ 0
+            failsafe = fmap (\i -> 't':show i) $ Stream.iterate succ 1
+            unused = not . (`Set.member` tvNames)
 
         niceName :: Id -> State (Map Id String, Stream String) String
         niceName x = do
