@@ -14,7 +14,6 @@ import Data.Map (Map)
 import qualified Data.Map as Map
 
 class Ord ξ => UVar a ξ | a -> ξ where
-    injectVar :: ξ -> a
     isVar :: a -> ξ -> Bool
 
 newtype Subst ξ a = Subst{ uvMap :: Map ξ a }
@@ -37,7 +36,5 @@ contract α t θ | t `isVar` α = Just θ
     θ' = Subst $ Map.insert α t $ uvMap θ
 
 -- | Resolve the variable α into a term
-resolve :: (SubstUVars a ξ) => ξ -> Subst ξ a -> a
-resolve α θ = case Map.lookup α (uvMap θ) of
-    Nothing -> injectVar α
-    Just t -> θ ▷ t
+resolve :: (SubstUVars a ξ) => ξ -> Subst ξ a -> Maybe a
+resolve α θ = fmap (θ ▷) $ Map.lookup α (uvMap θ)

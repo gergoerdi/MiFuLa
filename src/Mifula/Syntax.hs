@@ -30,7 +30,7 @@ import Data.Set (Set)
 import qualified Data.Set as Set
 import Data.Map (Map)
 import qualified Data.Map as Map
-import Data.Maybe (mapMaybe)
+import Data.Maybe (mapMaybe, fromMaybe)
 import Data.Stream (Stream(..))
 import qualified Data.Stream as Stream
 
@@ -56,7 +56,7 @@ class AST (a :: Pass -> *) where
     type TagKinded a = Tag a Scoped
 
     type TagTyped a
-    type TagTyped a = Maybe SourcePos -- TODO
+    type TagTyped a = Tag a Kinded
 
 data Tagged :: (Pass -> *) -> Pass -> * where
     T :: AST a => { tag :: Tag a π, unTag :: a π } -> Tagged a π
@@ -102,8 +102,6 @@ data Kind (a :: InOut) where
     KVar :: Kv -> Kind In
 
 instance UVar (Kind In) Kv where
-    injectVar = KVar
-
     κ `isVar` α = case κ of
         KVar β -> β == α
         _ -> False
@@ -124,7 +122,7 @@ instance SubstUVars (Kind In) Kv where
     θ ▷ κ = case κ of
         KStar -> κ
         KArr κ κ' -> KArr (θ ▷ κ) (θ ▷ κ')
-        KVar α -> resolve α θ
+        KVar α -> KVar α `fromMaybe` resolve α θ
 
 data Tv (π :: Pass) where
     TvNamed :: Ref π -> Tv π
@@ -141,15 +139,11 @@ data Ty π = TyCon (TyCon π)
           | TyFun
 
 instance UVar (Ty π) (Tv π) where
-    injectVar = TyVar
-
     τ `isVar` α = case τ of
         TyVar β -> β == α
         _ -> False
 
-instance (Default (Tag Ty π)) => UVar (Tagged Ty π) (Tv π) where
-    injectVar = T def . TyVar
-
+instance UVar (Tagged Ty π) (Tv π) where
     tτ `isVar` α = unTag tτ `isVar` α
 
 instance HasUVars (Ty π) (Tv π) where
@@ -162,13 +156,13 @@ instance HasUVars (Ty π) (Tv π) where
             TyApp t u -> go (unTag t) >> go (unTag u)
             _ -> return ()
 
-instance (Default (Tag Ty π)) => HasUVars (Tagged Ty π) (Tv π) where
+instance HasUVars (Tagged Ty π) (Tv π) where
     uvars = uvars . unTag
 
 instance SubstUVars (Tagged Ty Typed) (Tv Typed) where
     θ ▷ tτ = case unTag tτ of
         TyCon con -> tτ
-        TyVar α -> resolve α θ
+        TyVar α -> tτ `fromMaybe` resolve α θ
         TyApp tt tu -> T (tag tτ) $ TyApp (θ ▷ tt) (θ ▷ tu)
         TyFun -> tτ
 
@@ -424,12 +418,18 @@ noPos :: SourcePos
 noPos = initialPos ""
 
 instance AST Ty where
-    type TagKinded Ty = (Tag Ty Scoped, Kind Out)
+    type TagKinded Ty = (Maybe (Tag Ty Scoped), Kind Out)
 
-instance AST Def
+instance AST Def where
+    type TagTyped Def = (Tag Def Kinded, Tagged Ty Typed)
+
 instance AST Match
-instance AST Pat
-instance AST Expr
+
+instance AST Pat where
+    type TagTyped Pat = (Tag Pat Kinded, Tagged Ty Typed)
+
+instance AST Expr where
+    type TagTyped Expr = (Tag Expr Kinded, Tagged Ty Typed)
 
 infixr ~>
 (~>) :: Default (Tag Ty π) => Ty π -> Ty π -> Ty π
