@@ -1,4 +1,5 @@
 {-# LANGUAGE FlexibleContexts, UndecidableInstances #-}
+{-# LANGUAGE FunctionalDependencies, FlexibleInstances #-}
 {-# LANGUAGE TypeFamilies #-}
 {-# LANGUAGE GADTs #-}
 {-# LANGUAGE DataKinds, KindSignatures #-}
@@ -17,8 +18,20 @@ module Mifula.Syntax
 
 import Data.Default
 import Text.Show
-import Text.PrettyPrint.Leijen
+import Text.PrettyPrint.Leijen hiding ((<$>))
 import Text.ParserCombinators.Parsec.Pos (SourcePos, initialPos)
+import Mifula.Unify.UVar
+
+import Control.Applicative
+import Control.Monad.State
+import Control.Monad.Writer hiding ((<>))
+import Data.Set (Set)
+import qualified Data.Set as Set
+import Data.Map (Map)
+import qualified Data.Map as Map
+import Data.Maybe (mapMaybe)
+import Data.Stream (Stream(..))
+import qualified Data.Stream as Stream
 
 data Pass = Parsed
           | Scoped
@@ -92,6 +105,38 @@ data Ty π = TyCon (TyCon π)
           | TyApp (Tagged Ty π) (Tagged Ty π)
           | TyFun
 
+instance UVar (Ty π) (Tv π) where
+    injectVar = TyVar
+
+    τ `isVar` α = case τ of
+        TyVar β -> β == α
+        _ -> False
+
+instance (Default (Tag Ty π)) => UVar (Tagged Ty π) (Tv π) where
+    injectVar = T def . TyVar
+
+    tτ `isVar` α = unTag tτ `isVar` α
+
+instance HasUVars (Ty π) (Tv π) where
+    uvars = execWriter . go
+      where
+        collect = tell . Set.singleton
+
+        go τ = case τ of
+            TyVar α -> collect α
+            TyApp t u -> go (unTag t) >> go (unTag u)
+            _ -> return ()
+
+instance (Default (Tag Ty π)) => HasUVars (Tagged Ty π) (Tv π) where
+    uvars = uvars . unTag
+
+instance SubstUVars (Tagged Ty Typed) (Tv Typed) where
+    θ ▷ tτ = case unTag tτ of
+        TyCon con -> tτ
+        TyVar α -> resolve α θ
+        TyApp tt tu -> T (tag tτ) $ TyApp (θ ▷ tt) (θ ▷ tu)
+        TyFun -> tτ
+
 tyFunResult :: Tagged Ty π -> Tagged Ty π
 tyFunResult (T _ (TyApp (T _ (TyApp (T _ TyFun) _)) lt)) = tyFunResult lt
 tyFunResult lt = lt
@@ -110,25 +155,58 @@ instance (Show (Tag Ty π)) => Show (Ty π) where
         paren = showParen (prec > 10)
 
 instance Pretty (Ty π) where
-    pretty = go 0
+    pretty τ = evalState (go 0 τ) (mempty, niceNames)
       where
-        goT :: Int -> Tagged Ty π -> Doc
+        tvNames :: Set String
+        tvNames = Set.fromList . mapMaybe nameOf . Set.toList $ uvars τ
+          where
+            nameOf (TvNamed ref) = Just $ refName ref
+            nameOf (TvFresh _) = Nothing
+
+        prepend :: [a] -> Stream a -> Stream a
+        prepend (x:xs) ys = Cons x $ prepend xs ys
+        prepend [] ys = ys
+
+        niceNames :: Stream String
+        niceNames = prepend preferred' failsafe
+          where
+            preferred = ["α", "β", "γ"] ++ map (:[]) ['a'..'z']
+            preferred' = filter (not . (`Set.member` tvNames)) preferred
+            failsafe = fmap (\i -> 't':show i) $ Stream.iterate succ 0
+
+        niceName :: Id -> State (Map Id String, Stream String) String
+        niceName x = do
+            mapping <- gets fst
+            case Map.lookup x mapping of
+                Just s -> return s
+                Nothing -> do
+                    (Cons s ss) <- gets snd
+                    let mapping' = Map.insert x s mapping
+                    put (mapping', ss)
+                    return s
+
+        goT :: Int -> Tagged Ty π -> State (Map Id String, Stream String) Doc
         goT prec = go prec . unTag
 
-        go :: Int -> Ty π -> Doc
+        go :: Int -> Ty π -> State (Map Id String, Stream String) Doc
         go prec ty = case ty of
-            TyCon con -> pretty con
-            TyVar α -> case α of
-                TvNamed ref -> pretty ref
-                TvFresh id -> error "TODO: nice pprint of fresh typevars"
+            TyCon con ->
+                return $ pretty con
+            TyVar α ->
+                case α of
+                    TvNamed ref -> return $ pretty ref
+                    TvFresh id -> text <$> niceName id
             TyApp (T _ (TyApp (T _ TyFun) t)) u ->
-                paren arr_prec $ goT (arr_prec + 1) t <+> text "→" <+> goT 0 u
-            TyApp t u -> paren app_prec $ goT 0 t <+> goT (app_prec + 1) u
-            TyFun -> text "(→)"
+                paren arr_prec <$> (arr <$> goT (arr_prec + 1) t <*> goT 0 u)
+            TyApp t u ->
+                paren app_prec <$> ((<+>) <$> goT 0 t <*> goT (app_prec + 1) u)
+            TyFun ->
+                return $ text "(→)"
           where
             app_prec = 10
             arr_prec = 5
             paren lim = if prec > lim then parens else id
+            arr f x = f <+> text "→" <+> x
 
 type Var = Ref
 
