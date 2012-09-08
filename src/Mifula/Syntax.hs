@@ -10,7 +10,7 @@ module Mifula.Syntax
        ( Pass(..), AST(..), Tagged(..)
        , Id, Ref(..), Var, Con, TyCon
        , Ty(..), Tv(..)
-       , InOut(..), Kind(..)
+       , Kv, InOut(..), Kind(..)
        , Expr(..), Pat(..)
        , Match(..), Def(..), Defs(..)
        , defName
