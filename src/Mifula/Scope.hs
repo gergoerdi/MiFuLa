@@ -6,7 +6,6 @@ import Mifula.Syntax
 import Mifula.Scope.SC
 
 import Control.Applicative
-import Control.Arrow ((&&&))
 import Control.Monad (forM)
 
 import qualified Data.Graph as G

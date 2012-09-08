@@ -21,8 +21,7 @@ import Data.Map (Map)
 import qualified Data.Map as Map
 import Data.Stream (Stream(..))
 import qualified Data.Stream as Stream
-import Control.Arrow (first, second, (&&&))
-import Data.Default
+import Control.Arrow ((&&&))
 
 data ScopeError = SEUnresolvedCon (Con Parsed)
                 | SEUnresolvedVar (Var Parsed)

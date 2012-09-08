@@ -1,5 +1,6 @@
 {-# LANGUAGE DataKinds #-}
 import Mifula.Syntax
+import Mifula.Syntax.Pretty ()
 import Mifula.Parse (defs, parseWhole)
 import Mifula.Scope (scopeDefs)
 import Mifula.Scope.SC (runSC)
@@ -11,11 +12,7 @@ import Text.PrettyPrint.Leijen
 import Data.Set (Set)
 import qualified Data.Set as Set
 
-import Data.Map (Map)
-import qualified Data.Map as Map
-import Data.Monoid
 import Prelude hiding (mapM)
-import Data.Default
 
 foo :: Defs Parsed
 foo = parseD prog
