@@ -7,8 +7,10 @@
 {-# LANGUAGE GeneralizedNewtypeDeriving, StandaloneDeriving #-}
 module Mifula.Syntax
        ( Pass(..), AST(..), Tagged(..)
-       , Id, Ref(..), Tv, Var, Con, TyCon
-       , Ty(..), Expr(..), Pat(..), Match(..), Def(..), Defs(..)
+       , Id, Ref(..), Var, Con, TyCon
+       , Ty(..), Tv(..)
+       , Expr(..), Pat(..)
+       , Match(..), Def(..), Defs(..)
        , defName
        , SourcePos, noPos
        ) where
@@ -76,7 +78,13 @@ instance Pretty (Ref π) where
         NameRef s -> text s
         IdRef s _ -> text s
 
-type Tv = Ref
+data Tv (π :: Pass) where
+    TvNamed :: Ref π -> Tv π
+    TvFresh :: Id -> Tv Typed
+deriving instance Show (Tv π)
+deriving instance Eq (Tv π)
+deriving instance Ord (Tv π)
+
 type TyCon = Ref
 
 data Ty π = TyCon (TyCon π)
@@ -110,7 +118,9 @@ instance Pretty (Ty π) where
         go :: Int -> Ty π -> Doc
         go prec ty = case ty of
             TyCon con -> pretty con
-            TyVar α -> pretty α
+            TyVar α -> case α of
+                TvNamed ref -> pretty ref
+                TvFresh id -> error "TODO: nice pprint of fresh typevars"
             TyApp (T _ (TyApp (T _ TyFun) t)) u ->
                 paren arr_prec $ goT (arr_prec + 1) t <+> text "→" <+> goT 0 u
             TyApp t u -> paren app_prec $ goT 0 t <+> goT (app_prec + 1) u

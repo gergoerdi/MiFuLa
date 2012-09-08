@@ -78,7 +78,7 @@ ty = buildExpressionParser table term <?> "type expression"
         -- whiteSpace
         pos <- getPos
         return $ \t u -> T pos $ TyApp t u
-    tyVar = TyVar <$> varname
+    tyVar = TyVar <$> (TvNamed <$> varname)
     tyCon = TyCon <$> conname
 
 pat :: Bool -> IP.IndentCharParser () (Tagged Pat Parsed)
