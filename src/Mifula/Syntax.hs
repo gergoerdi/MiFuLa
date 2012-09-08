@@ -53,12 +53,7 @@ class AST (a :: Pass -> *) where
 data Tagged :: (Pass -> *) -> Pass -> * where
     T :: AST a => { tag :: Tag a π, unTag :: a π } -> Tagged a π
 
-instance (AST a, Show (Tag a π), Show (a π)) => Show (Tagged a π) where
-    showsPrec prec T{..} = showParen (prec > 10) $
-                           showString "Tagged " .
-                           showsPrec 11 tag .
-                           showString " " .
-                           showsPrec 11 unTag
+deriving instance (AST a, Show (Tag a π), Show (a π)) => Show (Tagged a π)
 
 newtype Id = Id{ idHash :: Int }
            deriving (Eq, Ord, Enum, Show)
@@ -121,6 +116,7 @@ data Ty π = TyCon (TyCon π)
           | TyVar (Tv π)
           | TyApp (Tagged Ty π) (Tagged Ty π)
           | TyFun
+deriving instance Show (Tag Ty π) => Show (Ty π)
 
 instance UVar (Ty π) (Tv π) where
     τ `isVar` α = case τ of
@@ -154,19 +150,6 @@ tyFunResult :: Tagged Ty π -> Tagged Ty π
 tyFunResult (T _ (TyApp (T _ (TyApp (T _ TyFun) _)) lt)) = tyFunResult lt
 tyFunResult lt = lt
 
-instance (Show (Tag Ty π)) => Show (Ty π) where
-    showsPrec prec ty = case ty of
-        TyCon con -> paren $ showString "TyCon " . showsPrec 0 con
-        TyVar α -> paren $ showString "TyVar " . showsPrec 0 α
-        TyApp tt tu -> paren $
-                       showString "TyApp " .
-                       showsPrec 11 tt .
-                       showString " " .
-                       showsPrec 11 tu
-        TyFun -> showString "TyFun"
-      where
-        paren = showParen (prec > 10)
-
 type Var = Ref
 
 type Con = Ref
@@ -182,111 +165,30 @@ instance ScopedPass Typed
 data Defs π where
     DefsUngrouped :: UnscopedPass π => [Tagged Def π] -> Defs π
     DefsGrouped :: ScopedPass π => [[Tagged Def π]] -> Defs π
-
-instance ( Show (Tag Def π)
-         , Show (Tag Expr π)
-         , Show (Tag Match π)
-         , Show (Tag Pat π)
-         ) => Show (Defs π) where
-    showsPrec prec defs = case defs of
-        DefsUngrouped defs ->
-            showString "DefsUngrouped " . showsPrec 11 defs
-        DefsGrouped defss ->
-            showString "DefsGrouped " . showsPrec 11 defss
+deriving instance (Show (Tag Def π), Show (Tag Expr π), Show (Tag Match π), Show (Tag Pat π)) => Show (Defs π)
 
 data Def π = DefVar (Var π) (Defs π) (Tagged Expr π)
            | DefFun (Var π) [Tagged Match π]
+deriving instance (Show (Defs π), Show (Tag Def π), Show (Tag Expr π), Show (Tag Pat π), Show (Tag Match π)) => Show (Def π)
 
 defName :: Def π -> Var π
 defName (DefVar x _ _) = x
 defName (DefFun fun _) = fun
 
-instance ( Show (Defs π)
-         , Show (Tag Def π)
-         , Show (Tag Expr π)
-         , Show (Tag Pat π)
-         , Show (Tag Match π)
-         ) => Show (Def π) where
-    showsPrec prec def = case def of
-        DefVar var locals expr ->
-            showString "DefVar " .
-            showsPrec 11 var . showString " " .
-            showsPrec 11 locals . showString " " .
-            showsPrec 11 expr
-        DefFun f matches ->
-            showString "DefFun " .
-            showsPrec 11 f . showString " " .
-            showsPrec 11 matches
-
 data Match π = Match [Tagged Pat π] (Defs π) (Tagged Expr π)
-
-instance ( Show (Tag Match π)
-         , Show (Tag Pat π)
-         , Show (Tag Expr π)
-         , Show (Defs π)
-         , Show (Tag Def π)
-         ) => Show (Match π) where
-    showsPrec prec match = showParen (prec > 10) $ case match of
-        Match pats defs expr ->
-            showString "Match " .
-            showsPrec 11 pats . showString " " .
-            showsPrec 11 defs . showString " " .
-            showsPrec 11 expr
+deriving instance (Show (Tag Match π), Show (Tag Pat π), Show (Tag Expr π), Show (Defs π), Show (Tag Def π)) => Show (Match π)
 
 data Pat π = PVar (Var π)
            | PCon (Con π) [Tagged Pat π]
            | PWildcard
-
-instance (Show (Tag Pat π)) => Show (Pat π) where
-    showsPrec prec pat = case pat of
-        PVar x ->
-            paren $ showString "PVar " . showsPrec 0 x
-        PCon con ps ->
-            paren $
-            showString "PCon " .
-            showsPrec 11 con . showString " " .
-            shows ps
-        PWildcard ->
-            showString "PWildcard"
-      where
-        paren = showParen (prec > 10)
+deriving instance Show (Tag Pat π) => Show (Pat π)
 
 data Expr π = EVar (Var π)
             | ECon (Con π)
             | ELam (Tagged Pat π) (Tagged Expr π)
             | EApp (Tagged Expr π) (Tagged Expr π)
             | ELet (Defs π) (Tagged Expr π)
-
-instance ( Show (Tag Expr π)
-         , Show (Tag Pat π)
-         , Show (Defs π)
-         , Show (Tag Def π)
-         , Show (Tag Match π)
-         ) => Show (Expr π) where
-    showsPrec prec e = case e of
-        EVar var ->
-            paren $ showString "EVar " . showsPrec 0 var
-        ECon con ->
-            paren $ showString "ECon " . showsPrec 0 con
-        ELam pat exp ->
-            paren $
-            showString "ELam " .
-            showsPrec 11 pat .
-            showsPrec 11 exp
-        EApp f x ->
-            paren $
-            showString "EApp " .
-            showsPrec 11 f .
-            showString " " .
-            showsPrec 11 x
-        ELet defs exp ->
-            paren $
-            showString "ELet " .
-            showsPrec 11 defs .
-            showString " " .
-            showsPrec 11 exp
-      where
-        paren = showParen (prec > 10)
+deriving instance (Show (Tag Expr π), Show (Tag Pat π), Show (Defs π), Show (Tag Def π), Show (Tag Match π)) => Show (Expr π)
 
 noPos :: SourcePos
 noPos = initialPos ""
