@@ -10,6 +10,7 @@ module Mifula.Syntax
        ( Pass(..), AST(..), Tagged(..)
        , Id, Ref(..), Var, Con, TyCon
        , Ty(..), Tv(..)
+       , InOut(..), Kind(..)
        , Expr(..), Pat(..)
        , Match(..), Def(..), Defs(..)
        , defName
@@ -90,6 +91,40 @@ instance Pretty (Ref π) where
     pretty ref = case ref of
         NameRef s -> text s
         IdRef s _ -> text s
+
+type Kv = Id
+
+data InOut = In | Out
+
+data Kind (a :: InOut) where
+    KStar :: Kind a
+    KArr :: Kind a -> Kind a -> Kind a
+    KVar :: Kv -> Kind In
+
+instance UVar (Kind In) Kv where
+    injectVar = KVar
+
+    κ `isVar` α = case κ of
+        KVar β -> β == α
+        _ -> False
+
+instance HasUVars (Kind In) Kv where
+    uvars = execWriter . go
+      where
+        collect :: Kv -> Writer (Set Kv) ()
+        collect = tell . Set.singleton
+
+        go :: Kind In -> Writer (Set Kv) ()
+        go κ = case κ of
+            KVar α -> collect α
+            KArr κ κ' -> go κ >> go κ'
+            _ -> return ()
+
+instance SubstUVars (Kind In) Kv where
+    θ ▷ κ = case κ of
+        KStar -> κ
+        KArr κ κ' -> KArr (θ ▷ κ) (θ ▷ κ')
+        KVar α -> resolve α θ
 
 data Tv (π :: Pass) where
     TvNamed :: Ref π -> Tv π
@@ -388,7 +423,9 @@ instance Pretty (Expr π) where
 noPos :: SourcePos
 noPos = initialPos ""
 
-instance AST Ty
+instance AST Ty where
+    type TagKinded Ty = (Tag Ty Scoped, Kind Out)
+
 instance AST Def
 instance AST Match
 instance AST Pat
