@@ -1,5 +1,5 @@
 {-# LANGUAGE DataKinds #-}
-{-# LANGUAGE FlexibleInstances, FlexibleContexts #-}
+{-# LANGUAGE FlexibleInstances, FlexibleContexts, UndecidableInstances #-}
 {-# LANGUAGE MultiParamTypeClasses, FunctionalDependencies, TypeFamilies #-}
 module Mifula.Unify.UVar
        ( Subst
@@ -24,6 +24,9 @@ class UVar ξ => HasUVars a ξ | a -> ξ where
 
 class UVar ξ => SubstUVars a ξ | a -> ξ where
     (▷) :: Subst ξ -> a -> a
+
+instance SubstUVars a ξ => SubstUVars [a] ξ where
+    θ ▷ xs = map (θ ▷) xs
 
 occurs :: (HasUVars a ξ) => ξ -> a -> Bool
 occurs x ty = x `Set.member` uvars ty

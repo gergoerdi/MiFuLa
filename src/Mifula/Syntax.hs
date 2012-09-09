@@ -168,9 +168,20 @@ data Defs π where
     DefsGrouped :: ScopedPass π => [[Tagged Def π]] -> Defs π
 deriving instance (Show (Tag Def π), Show (Tag Expr π), Show (Tag Match π), Show (Tag Pat π)) => Show (Defs π)
 
+instance SubstUVars (Defs Typed) (Tv Typed) where
+    θ ▷ (DefsGrouped defss) = DefsGrouped (θ ▷ defss)
+
 data Def π = DefVar (Var π) (Defs π) (Tagged Expr π)
            | DefFun (Var π) [Tagged Match π]
 deriving instance (Show (Defs π), Show (Tag Def π), Show (Tag Expr π), Show (Tag Pat π), Show (Tag Match π)) => Show (Def π)
+
+instance SubstUVars (Def Typed) (Tv Typed) where
+    θ ▷ def = case def of
+        DefVar var locals body -> DefVar var (θ ▷ locals) (θ ▷ body)
+        DefFun fun matches -> DefFun fun (θ ▷ matches)
+
+instance SubstUVars (Tagged Def Typed) (Tv Typed) where
+    θ ▷ (T (loc, τ) def) = T (loc, θ ▷ τ) $ θ ▷ def
 
 defName :: Def π -> Var π
 defName (DefVar x _ _) = x
@@ -179,10 +190,25 @@ defName (DefFun fun _) = fun
 data Match π = Match [Tagged Pat π] (Defs π) (Tagged Expr π)
 deriving instance (Show (Tag Match π), Show (Tag Pat π), Show (Tag Expr π), Show (Defs π), Show (Tag Def π)) => Show (Match π)
 
+instance SubstUVars (Match Typed) (Tv Typed) where
+    θ ▷ Match pats locals body = Match (θ ▷ pats) (θ ▷ locals) (θ ▷ body)
+
+instance SubstUVars (Tagged Match Typed) (Tv Typed) where
+    θ ▷ (T loc def) = T loc $ θ ▷ def
+
 data Pat π = PVar (Var π)
            | PCon (Con π) [Tagged Pat π]
            | PWildcard
 deriving instance Show (Tag Pat π) => Show (Pat π)
+
+instance SubstUVars (Pat Typed) (Tv Typed) where
+    θ ▷ pat = case pat of
+        PVar _ -> pat
+        PCon con pats -> PCon con (θ ▷ pats)
+        PWildcard -> pat
+
+instance SubstUVars (Tagged Pat Typed) (Tv Typed) where
+    θ ▷ (T (loc, τ) pat) = T (loc, θ ▷ τ) (θ ▷ pat)
 
 data Expr π = EVar (Var π)
             | ECon (Con π)
@@ -190,6 +216,17 @@ data Expr π = EVar (Var π)
             | EApp (Tagged Expr π) (Tagged Expr π)
             | ELet (Defs π) (Tagged Expr π)
 deriving instance (Show (Tag Expr π), Show (Tag Pat π), Show (Defs π), Show (Tag Def π), Show (Tag Match π)) => Show (Expr π)
+
+instance SubstUVars (Expr Typed) (Tv Typed) where
+    θ ▷ e = case e of
+        EVar _ -> e
+        ECon _ -> e
+        ELam pat body -> ELam (θ ▷ pat) (θ ▷ body)
+        EApp f x -> EApp (θ ▷ f) (θ ▷ x)
+        ELet defs body -> ELet (θ ▷ defs) (θ ▷ body)
+
+instance SubstUVars (Tagged Expr Typed) (Tv Typed) where
+    θ ▷ (T (loc, τ) e) = T (loc, θ ▷ τ) (θ ▷ e)
 
 noPos :: SourcePos
 noPos = initialPos ""
