@@ -17,6 +17,8 @@ module Mifula.Syntax
        , SourcePos, noPos
        ) where
 
+import Mifula.Id
+
 import Data.Default
 import Text.ParserCombinators.Parsec.Pos (SourcePos, initialPos)
 import Mifula.Unify.UVar
@@ -54,9 +56,6 @@ data Tagged :: (Pass -> *) -> Pass -> * where
     T :: AST a => { tag :: Tag a π, unTag :: a π } -> Tagged a π
 
 deriving instance (AST a, Show (Tag a π), Show (a π)) => Show (Tagged a π)
-
-newtype Id = Id{ idHash :: Int }
-           deriving (Eq, Ord, Enum, Show)
 
 data Ref (π :: Pass) where
     NameRef :: UnscopedPass π => { refName :: String } -> Ref π
