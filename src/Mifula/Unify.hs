@@ -16,9 +16,9 @@ data UnificationError ξ a = ErrIncongruent (UEq a)
                           | ErrOccurs ξ a
                           deriving Show
 
-unify :: forall a ξ. (UTerm ξ ~ a, Unify a ξ, HasUVars a ξ)
-      => Bool -> [UEq a] -> Either (UEq a, UnificationError ξ a) (Subst ξ)
-unify allowFlip = go . map (id &&& id)
+unifyEqs :: forall a ξ. (UTerm ξ ~ a, Unify a ξ, HasUVars a ξ)
+         => Bool -> [UEq a] -> Either (UEq a, UnificationError ξ a) (Subst ξ)
+unifyEqs allowFlip = go . map (id &&& id)
   where
     go :: [(UEq a, UEq a)] -> Either (UEq a, UnificationError ξ a) (Subst ξ)
     go [] = return mempty
