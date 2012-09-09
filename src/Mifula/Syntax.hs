@@ -80,7 +80,9 @@ data Kind (a :: InOut) where
     KArr :: Kind a -> Kind a -> Kind a
     KVar :: Kv -> Kind In
 
-instance UVar (Kind In) Kv where
+instance UVar Kv where
+    type UTerm Kv = Kind In
+
     κ `isVar` α = case κ of
         KVar β -> β == α
         _ -> False
@@ -118,13 +120,12 @@ data Ty π = TyCon (TyCon π)
           | TyFun
 deriving instance Show (Tag Ty π) => Show (Ty π)
 
-instance UVar (Ty π) (Tv π) where
-    τ `isVar` α = case τ of
+instance UVar (Tv π) where
+    type UTerm (Tv π) = Tagged Ty π
+
+    tτ `isVar` α = case unTag tτ of
         TyVar β -> β == α
         _ -> False
-
-instance UVar (Tagged Ty π) (Tv π) where
-    tτ `isVar` α = unTag tτ `isVar` α
 
 instance HasUVars (Ty π) (Tv π) where
     uvars = execWriter . go

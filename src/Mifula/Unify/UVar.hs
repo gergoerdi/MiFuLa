@@ -13,22 +13,24 @@ import qualified Data.Set as Set
 import Data.Map (Map)
 import qualified Data.Map as Map
 
-class Ord ξ => UVar a ξ | a -> ξ where
-    isVar :: a -> ξ -> Bool
+class Ord ξ => UVar ξ where
+    type UTerm ξ
+    isVar :: UTerm ξ -> ξ -> Bool
 
-newtype Subst ξ a = Subst{ uvMap :: Map ξ a }
+newtype Subst ξ = Subst{ uvMap :: Map ξ (UTerm ξ) }
 
-class UVar a ξ => HasUVars a ξ | a -> ξ where
+class UVar ξ => HasUVars a ξ | a -> ξ where
     uvars :: a -> Set ξ
 
-class HasUVars a ξ => SubstUVars a ξ | a -> ξ where
-    (▷) :: Subst ξ a -> a -> a
+class UVar ξ => SubstUVars a ξ | a -> ξ where
+    (▷) :: Subst ξ -> a -> a
 
 occurs :: (HasUVars a ξ) => ξ -> a -> Bool
 occurs x ty = x `Set.member` uvars ty
 
 -- | Contract the varible α with the term t, i.e. add a substitution t/α
-contract :: (HasUVars a ξ) => ξ -> a -> Subst ξ a -> Maybe (Subst ξ a)
+contract :: (UVar ξ, HasUVars (UTerm ξ) ξ)
+         => ξ -> UTerm ξ -> Subst ξ -> Maybe (Subst ξ)
 contract α t θ | t `isVar` α = Just θ
                | occurs α t = Nothing
                | otherwise = Just θ'
@@ -36,5 +38,5 @@ contract α t θ | t `isVar` α = Just θ
     θ' = Subst $ Map.insert α t $ uvMap θ
 
 -- | Resolve the variable α into a term
-resolve :: (SubstUVars a ξ) => ξ -> Subst ξ a -> Maybe a
+resolve :: (SubstUVars (UTerm ξ) ξ) => ξ -> Subst ξ -> Maybe (UTerm ξ)
 resolve α θ = fmap (θ ▷) $ Map.lookup α (uvMap θ)
