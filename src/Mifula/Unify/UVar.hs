@@ -1,6 +1,7 @@
 {-# LANGUAGE DataKinds #-}
 {-# LANGUAGE FlexibleInstances, FlexibleContexts, UndecidableInstances #-}
 {-# LANGUAGE MultiParamTypeClasses, FunctionalDependencies, TypeFamilies #-}
+{-# LANGUAGE GeneralizedNewtypeDeriving #-}
 module Mifula.Unify.UVar
        ( Subst
        , UVar(..), HasUVars(..), SubstUVars(..)
@@ -12,12 +13,14 @@ import Data.Set (Set)
 import qualified Data.Set as Set
 import Data.Map (Map)
 import qualified Data.Map as Map
+import Data.Monoid
 
 class Ord ξ => UVar ξ where
     type UTerm ξ
     isVar :: UTerm ξ -> ξ -> Bool
 
 newtype Subst ξ = Subst{ uvMap :: Map ξ (UTerm ξ) }
+                  deriving Monoid
 
 class UVar ξ => HasUVars a ξ | a -> ξ where
     uvars :: a -> Set ξ
