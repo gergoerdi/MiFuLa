@@ -58,8 +58,8 @@ data Tagged :: (Pass -> *) -> Pass -> * where
 deriving instance (AST a, Show (Tag a π), Show (a π)) => Show (Tagged a π)
 
 data Ref (π :: Pass) where
-    NameRef :: UnscopedPass π => { refName :: String } -> Ref π
-    IdRef :: ScopedPass π => {refName :: String, refID ::  Id } -> Ref π
+    NameRef :: (ScopedPass π ~ False) => { refName :: String } -> Ref π
+    IdRef :: (ScopedPass π ~ True) => {refName :: String, refID ::  Id } -> Ref π
 deriving instance Show (Ref π)
 
 instance Eq (Ref π) where
@@ -154,17 +154,15 @@ type Var = Ref
 
 type Con = Ref
 
-class UnscopedPass (π :: Pass)
-class ScopedPass (π :: Pass)
-
-instance UnscopedPass Parsed
-instance ScopedPass Scoped
-instance ScopedPass Kinded
-instance ScopedPass Typed
+type family ScopedPass (π :: Pass) :: Bool
+type instance ScopedPass Parsed = False
+type instance ScopedPass Scoped = True
+type instance ScopedPass Kinded = True
+type instance ScopedPass Typed = True
 
 data Defs π where
-    DefsUngrouped :: UnscopedPass π => [Tagged Def π] -> Defs π
-    DefsGrouped :: ScopedPass π => [[Tagged Def π]] -> Defs π
+    DefsUngrouped :: (ScopedPass π ~ False) => [Tagged Def π] -> Defs π
+    DefsGrouped :: (ScopedPass π ~ True) => [[Tagged Def π]] -> Defs π
 deriving instance (Show (Tag Def π), Show (Tag Expr π), Show (Tag Match π), Show (Tag Pat π)) => Show (Defs π)
 
 instance SubstUVars (Defs Typed) (Tv Typed) where
