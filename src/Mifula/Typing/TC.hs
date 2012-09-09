@@ -8,6 +8,7 @@ import Mifula.Syntax
 import Control.Applicative
 import Data.Map (Map)
 import qualified Data.Map as Map
+import Data.Set (Set)
 import Data.Monoid
 
 newtype TC a = TC{ unTC :: SupplyId a }
@@ -18,6 +19,12 @@ newtype MonoEnv = MonoEnv{ monoVarMap :: Map (Var Scoped) (Tagged Ty Typed) }
 
 monoVar :: Var Scoped -> Tagged Ty Typed -> MonoEnv
 monoVar = undefined
+
+monoVars :: MonoEnv -> Set (Var Scoped)
+monoVars = undefined
+
+removeMonoVars :: Set (Var Scoped) -> MonoEnv -> MonoEnv
+removeMonoVars = undefined
 
 instance MonadFresh (Tv Typed) TC where
     fresh = TvFresh <$> TC fresh
