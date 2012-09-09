@@ -241,15 +241,3 @@ instance AST Pat where
 
 instance AST Expr where
     type TagTyped Expr = (Tag Expr Kinded, Tagged Ty Typed)
-
-infixr ~>
-(~>) :: Default (Tag Ty π) => Ty π -> Ty π -> Ty π
-t ~> u = TyApp (T def $ TyApp (T def $ TyFun) (T def t)) (T def u)
-
-infixr ~~>
-(~~>) :: Default (Tag Ty π) => Tagged Ty π -> Tagged Ty π -> Tagged Ty π
-t ~~> u = T def $ TyApp (T def $ TyApp (T def $ TyFun) t) u
-
-infixl @@
-(@@) :: Default (Tag Expr π) => Expr π -> Expr π -> Expr π
-f @@ x = T def f `EApp` T def x
