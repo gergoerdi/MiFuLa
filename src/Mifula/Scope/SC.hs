@@ -42,14 +42,11 @@ instance Monoid W where
     mempty = W mempty mempty mempty
     (W refs defs errors) `mappend` (W refs' defs' errors') = W (refs <> refs') (defs <> defs') (errors <> errors')
 
-newtype SC a = SC{ unSC :: RWS R W (Stream Id) a }
+newtype SC a = SC{ unSC :: RWST R W () SupplyId a }
              deriving (Functor, Applicative, Monad)
 
 instance MonadFresh Id SC where
-    fresh = SC $ do
-        Cons x xs <- get
-        put xs
-        return x
+    fresh = SC . lift $ fresh
 
 withId :: Ref Parsed -> Id -> Ref Scoped
 (NameRef s) `withId` x = IdRef s x
@@ -58,7 +55,7 @@ unId :: Ref Scoped -> Ref Parsed
 unId = NameRef . refName
 
 runSC :: Set (Con Parsed) -> SC a -> Either [(SourcePos, ScopeError)] a
-runSC cons sc = case evalRWS (unSC sc') r₀ s₀ of
+runSC cons sc = case runSupplyId $ evalRWST (unSC sc') r₀ () of
     (x, w) -> case wErrors w of
         [] -> Right x
         errs -> Left errs
@@ -73,8 +70,6 @@ runSC cons sc = case evalRWS (unSC sc') r₀ s₀ of
             x <- fresh
             return $ (con, con `withId` x)
         SC . local (\r -> r{ rCons = cons' }) . unSC $ sc
-
-    s₀ = Stream.iterate succ (toEnum 0)
 
 listenVars :: Set (Var Scoped) -> SC a -> SC (a, Set (Var Scoped))
 listenVars newVars = listenRefs (`Set.member` newVars) . withVars newVars
