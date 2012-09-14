@@ -5,6 +5,7 @@ module Mifula.Typing.TC where
 
 import Mifula.Fresh
 import Mifula.Syntax
+import Mifula.Unify.UVar
 import Control.Applicative
 import Data.Map (Map)
 import qualified Data.Map as Map
@@ -17,6 +18,9 @@ newtype TC a = TC{ unTC :: SupplyId a }
 newtype MonoEnv = MonoEnv{ monoVarMap :: Map (Var Scoped) (Tagged Ty Typed) }
                 deriving Monoid
 
+instance SubstUVars MonoEnv (Tv Typed) where
+    θ ▷ m = MonoEnv . fmap (θ ▷) . monoVarMap $ m
+
 monoVar :: Var Scoped -> Tagged Ty Typed -> MonoEnv
 monoVar = undefined
 
@@ -25,6 +29,9 @@ monoVars = undefined
 
 removeMonoVars :: Set (Var Scoped) -> MonoEnv -> MonoEnv
 removeMonoVars = undefined
+
+lookupMonoVar :: Var Scoped -> MonoEnv -> Maybe (Tagged Ty Typed)
+lookupMonoVar = undefined
 
 instance MonadFresh (Tv Typed) TC where
     fresh = TvFresh <$> TC fresh
