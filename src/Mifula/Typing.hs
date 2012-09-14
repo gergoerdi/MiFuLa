@@ -106,7 +106,18 @@ inferPat (T loc pat) = case pat of
     PVar x -> do
         α <- freshTy
         return (T (loc, α) $ PVar (ref x), monoVar x α)
-    PCon con pats -> undefined
+    PCon con pats -> do
+        α <- freshTy
+        τ <- instantiate =<< lookupCon con
+        (pats', typings') <- unzip <$> mapM inferPat pats
+        let ms = map (\(τ :@ m) -> m) typings'
+            τs = map (\(τ :@ m) -> τ) typings' -- TODO: unzip...
+        (θ, m, _) <- unify ms [τ, foldr (tyArr loc) α τs]
+        let τ' = θ ▷ τ
+        case τ' of
+            (T _ (TyApp (T _ (TyApp (T _ TyFun) _)) _)) -> undefined -- TODO: unsaturated constructor in pattern
+            _ -> return ()
+        return (T (loc, τ') (θ ▷ PCon (ref con) pats'), τ' :@ m)
     PWildcard -> do
         α <- freshTy
         return (T (loc, α) PWildcard, α :@ mempty)

@@ -146,10 +146,6 @@ instance SubstUVars (Tagged Ty Typed) (Tv Typed) where
         TyApp tt tu -> T (tag tτ) $ TyApp (θ ▷ tt) (θ ▷ tu)
         TyFun -> tτ
 
-tyFunResult :: Tagged Ty π -> Tagged Ty π
-tyFunResult (T _ (TyApp (T _ (TyApp (T _ TyFun) _)) lt)) = tyFunResult lt
-tyFunResult lt = lt
-
 type Var = Ref
 
 type Con = Ref
