@@ -12,10 +12,17 @@ import Data.Map (Map)
 import qualified Data.Map as Map
 import Data.Set (Set)
 import Data.Monoid
-import Data.Foldable (foldMap)
+import Prelude hiding (foldr)
+import Data.Foldable (foldMap, foldr)
 
 newtype TC a = TC{ unTC :: SupplyId a }
              deriving (Functor, Applicative, Monad)
+
+lookupPolyVar :: Var Scoped -> TC (Maybe Typing)
+lookupPolyVar = undefined
+
+lookupCon :: Con Scoped -> TC (Tagged Ty Typed)
+lookupCon = undefined
 
 newtype MonoEnv = MonoEnv{ monoVarMap :: Map (Var Scoped) (Tagged Ty Typed) }
                 deriving Monoid
@@ -27,16 +34,18 @@ instance HasUVars MonoEnv (Tv Typed) where
     uvars = foldMap uvars . monoVarMap
 
 monoVar :: Var Scoped -> Tagged Ty Typed -> Typing
-monoVar = undefined
+monoVar x τ = τ :@ m
+  where
+    m = MonoEnv $ Map.singleton x τ
 
 monoVars :: MonoEnv -> Set (Var Scoped)
-monoVars = undefined
+monoVars = Map.keysSet . monoVarMap
 
 removeMonoVars :: Set (Var Scoped) -> MonoEnv -> MonoEnv
-removeMonoVars = undefined
+removeMonoVars xs = MonoEnv . (foldr Map.delete `flip` xs) . monoVarMap
 
 lookupMonoVar :: Var Scoped -> MonoEnv -> Maybe (Tagged Ty Typed)
-lookupMonoVar = undefined
+lookupMonoVar x = Map.lookup x . monoVarMap
 
 instance MonadFresh (Tv Typed) TC where
     fresh = TvFresh <$> TC fresh
@@ -44,13 +53,7 @@ instance MonadFresh (Tv Typed) TC where
 data Typing = Tagged Ty Typed :@ MonoEnv
 
 instance SubstUVars Typing (Tv Typed) where
-    θ ▷ (τ :@ m) = undefined
+    θ ▷ (τ :@ m) = (θ ▷ τ) :@ (θ ▷ m)
 
 instance HasUVars Typing (Tv Typed) where
     uvars (τ :@ m) = uvars τ <> uvars m
-
-lookupPolyVar :: Var Scoped -> TC (Maybe Typing)
-lookupPolyVar = undefined
-
-lookupCon :: Con Scoped -> TC (Tagged Ty Typed)
-lookupCon = undefined
