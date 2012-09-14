@@ -1,4 +1,5 @@
 {-# LANGUAGE DataKinds, GADTs #-}
+{-# LANGUAGE FlexibleContexts #-}
 module Mifula.Typing where
 
 import Mifula.Typing.TC
@@ -10,20 +11,26 @@ import Mifula.Syntax
 import Control.Applicative
 import Mifula.Fresh
 import Data.Monoid
-import Data.Maybe (mapMaybe)
+import Data.Maybe (mapMaybe, fromMaybe)
+import Data.Foldable (foldlM)
 
 import Data.Set (Set)
 import qualified Data.Set as Set
 
-instantiateTyping :: Typing -> TC Typing
-instantiateTyping = undefined
+instantiate :: (HasUVars a (Tv Typed), SubstUVars a (Tv Typed)) => a -> TC a
+instantiate x = do
+    θ <- foldlM generalize mempty $ uvars x
+    return $ θ ▷ x
+  where
+    generalize θ α = fromMaybe (error "impossible: fresh variable occurs in type") <$>
+                     (contract α <$> freshTy <*> pure θ)
 
 ref :: Ref Scoped -> Ref Typed
 ref (IdRef name x) = IdRef name x
 
 inferExpr :: Tagged Expr Scoped -> TC (Tagged Expr Typed, Typing)
 inferExpr expr = do
-    (expr', typing@(m, τ)) <- inferExpr_ expr
+    (expr', typing@(τ :@ m)) <- inferExpr_ expr
     return (T (tag expr, τ) expr', typing)
 
 freshTy :: TC (Tagged Ty Typed)
@@ -37,9 +44,12 @@ unify ms τs = do
     α <- freshTy
     let eqs = map (:~: α) τs
         eqs' = concatMap toEqs . Set.toList $ vars
-    case unifyEqs True eqs' of
-        Left err -> undefined
-        Right θ -> return (θ, mconcat (θ ▷ ms), θ ▷ α)
+    θ <- case unifyEqs True eqs' of
+        Left (eq, err) -> do
+            undefined -- emit recoverable error
+            return mempty
+        Right θ -> return θ
+    return (θ, θ ▷ mconcat ms, θ ▷ α)
   where
     vars :: Set (Var Scoped)
     vars = mconcat $ map monoVars ms
@@ -65,38 +75,38 @@ inferExpr_ (T loc expr) = case expr of
             case mtyping of
                 Nothing -> do
                     α <- freshTy
-                    return (monoVar x α, α)
-                Just typing -> instantiateTyping typing
+                    return $ monoVar x α
+                Just typing -> instantiate typing
         return (EVar (ref x), typing)
     ECon c -> do
         τ <- lookupCon c
-        let typing = (mempty, τ)
-        typing' <- instantiateTyping typing
+        let typing = τ :@ mempty
+        typing' <- instantiate typing
         return (ECon (ref c), typing')
     EApp f arg -> do
-        (f', (m₁, τ₁)) <- inferExpr f
-        (arg', (m₂, τ₂)) <- inferExpr arg
+        (f', τ₁ :@ m₁) <- inferExpr f
+        (arg', τ₂ :@ m₂) <- inferExpr arg
         α <- freshTy
         (θ, m, _) <- unify [m₁, m₂] [τ₁, tyArr loc τ₂ α]
-        return (EApp (θ ▷ f') (θ ▷ arg'), (m, θ ▷ α))
+        return (EApp (θ ▷ f') (θ ▷ arg'), (θ ▷ α) :@ m)
     ELam pat body -> do
-        (pat', (mPat, τPat)) <- inferPat pat
-        (body', (mBody, τBody)) <- inferExpr body
+        (pat', τPat :@ mPat) <- inferPat pat
+        (body', τBody :@ mBody) <- inferExpr body
         (θ, m, τ) <- unify [mPat, mBody] [tyArr loc τPat τBody]
         let m' = removeMonoVars (monoVars mPat) m
-        return (ELam (θ ▷ pat') (θ ▷ body'), (m', τ))
+        return (ELam (θ ▷ pat') (θ ▷ body'), τ :@ m')
     ELet defs body -> do
         defs' <- undefined
-        (body', (mBody, τBody)) <- inferExpr body
-        (θ, m, τ) <- undefined
-        return (ELet (θ ▷ defs') (θ ▷ body'), (m, τ))
+        (body', τBody :@ mBody) <- inferExpr body
+        (θ, τ :@ m) <- undefined
+        return (ELet (θ ▷ defs') (θ ▷ body'), τ :@ m)
 
 inferPat :: Tagged Pat Scoped -> TC (Tagged Pat Typed, Typing)
 inferPat (T loc pat) = case pat of
     PVar x -> do
         α <- freshTy
-        return (T (loc, α) $ PVar (ref x), (monoVar x α, α))
+        return (T (loc, α) $ PVar (ref x), monoVar x α)
     PCon con pats -> undefined
     PWildcard -> do
         α <- freshTy
-        return (T (loc, α) PWildcard, (mempty, α))
+        return (T (loc, α) PWildcard, α :@ mempty)
