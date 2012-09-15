@@ -74,10 +74,11 @@ type Kv = Id
 
 data InOut = In | Out
 
-data Kind (a :: InOut) where
-    KStar :: Kind a
-    KArr :: Kind a -> Kind a -> Kind a
+data Kind (dir :: InOut) where
+    KStar :: Kind dir
+    KArr :: Kind dir -> Kind dir -> Kind dir
     KVar :: Kv -> Kind In
+deriving instance Show (Kind dir)
 
 instance UVar Kv where
     type UTerm Kv = Kind In

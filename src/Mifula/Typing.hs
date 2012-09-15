@@ -1,6 +1,6 @@
 {-# LANGUAGE DataKinds, GADTs #-}
 {-# LANGUAGE FlexibleContexts #-}
-module Mifula.Typing where
+module Mifula.Typing (inferDefs) where
 
 import Mifula.Typing.TC
 import Mifula.Unify.UVar
@@ -22,11 +22,18 @@ instantiate x = do
     θ <- foldlM generalize mempty $ uvars x
     return $ θ ▷ x
   where
-    generalize θ α = fromMaybe (error "impossible: fresh variable occurs in type") <$>
-                     (contract α <$> freshTy <*> pure θ)
+    generalize θ α =
+        contract α <$> freshTy <*> pure θ >>=
+        maybe (internalError "fresh variable occurs in type") return
 
 ref :: Ref Scoped -> Ref Typed
 ref (IdRef name x) = IdRef name x
+
+inferDefs :: Defs Scoped -> TC (Defs Typed)
+inferDefs (DefsGrouped defss) = DefsGrouped <$> mapM inferDefGroup defss
+
+inferDefGroup :: [Tagged Def Scoped] -> TC ([Tagged Def Typed])
+inferDefGroup = undefined
 
 inferExpr :: Tagged Expr Scoped -> TC (Tagged Expr Typed, Typing)
 inferExpr expr = do
@@ -113,7 +120,7 @@ inferPat (T loc pat) = case pat of
         let ms = map (\(τ :@ m) -> m) typings'
             τs = map (\(τ :@ m) -> τ) typings' -- TODO: unzip...
         (θ, m, _) <- unify ms [τ, foldr (tyArr loc) α τs]
-        let τ' = θ ▷ τ
+        let τ' = θ ▷ α
         case τ' of
             (T _ (TyApp (T _ (TyApp (T _ TyFun) _)) _)) -> undefined -- TODO: unsaturated constructor in pattern
             _ -> return ()
