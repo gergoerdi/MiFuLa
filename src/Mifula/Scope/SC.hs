@@ -54,22 +54,23 @@ withId :: Ref Parsed -> Id -> Ref Scoped
 unId :: Ref Scoped -> Ref Parsed
 unId = NameRef . refName
 
-runSC :: Set (Con Parsed) -> SC a -> Either [(SourcePos, ScopeError)] a
-runSC cons sc = case runSupplyId $ evalRWST (unSC sc') r₀ () of
+runSC :: Set (Con Parsed) -> SC a -> Either [(SourcePos, ScopeError)] (Set (Con Scoped), a)
+runSC cons sc = case runSupplyId $ evalRWST (unSC sc') r () of
     (x, w) -> case wErrors w of
         [] -> Right x
         errs -> Left errs
   where
-    r₀ = R{ rVars = mempty
-          , rCons = mempty
-          , rPos = noPos
-          }
+    r = R{ rVars = mempty
+         , rCons = mempty
+         , rPos = noPos
+         }
 
     sc' = do
         cons' <- fmap Map.fromAscList $ forM (Set.toAscList cons) $ \con -> do
             x <- fresh
             return $ (con, con `withId` x)
-        SC . local (\r -> r{ rCons = cons' }) . unSC $ sc
+        x <- SC . local (\r -> r{ rCons = cons' }) . unSC $ sc
+        return (Set.fromList $ Map.elems cons', x)
 
 listenVars :: Set (Var Scoped) -> SC a -> SC (a, Set (Var Scoped))
 listenVars newVars = listenRefs (`Set.member` newVars) . withVars newVars
