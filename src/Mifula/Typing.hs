@@ -51,7 +51,7 @@ unify ms τs = do
     α <- freshTy
     let eqs = map (:~: α) τs
         eqs' = concatMap toEqs . Set.toList $ vars
-    θ <- case unifyEqs True eqs' of
+    θ <- case unifyEqs True (eqs ++ eqs') of
         Left (eq, err) -> do
             undefined -- emit recoverable error
             return mempty
