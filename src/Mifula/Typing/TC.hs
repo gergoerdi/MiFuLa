@@ -30,8 +30,11 @@ instance HasUVars Typing (Tv Typed) where
 -- key, so we might as well use an IntMap if it turns out to be more
 -- performant.
 
+newtype PolyEnv = PolyEnv{ unPolyEnv :: Map (Var Scoped) Typing }
+                deriving (Show, Monoid)
+
 data R = R{ rCons :: Map (Con Scoped) (Tagged Ty Typed)
-          , rPolyVars :: Map (Var Scoped) Typing
+          , rPolyEnv :: PolyEnv
           }
        deriving Show
 
@@ -39,12 +42,12 @@ newtype TC a = TC{ unTC :: ReaderT R SupplyId a }
              deriving (Functor, Applicative, Monad)
 
 runTC :: Map (Con Scoped) (Tagged Ty Typed)
-      -> Map (Var Scoped) Typing
+      -> PolyEnv
       -> TC a -> a -- TODO: errors
-runTC cons polyVars tc = runSupplyId $ runReaderT (unTC tc) r
+runTC cons polyEnv tc = runSupplyId $ runReaderT (unTC tc) r
   where
     r = R{ rCons = cons
-         , rPolyVars = polyVars
+         , rPolyEnv = polyEnv
          }
 
 internalError :: String -> TC a
@@ -54,7 +57,7 @@ internalError s = error $ unwords ["Internal error:", s]
 -- noteError = undefined
 
 lookupPolyVar :: Var Scoped -> TC (Maybe Typing)
-lookupPolyVar var = TC . asks $ Map.lookup var . rPolyVars
+lookupPolyVar var = TC . asks $ Map.lookup var . unPolyEnv . rPolyEnv
 
 lookupCon :: Con Scoped -> TC (Tagged Ty Typed)
 lookupCon con =
