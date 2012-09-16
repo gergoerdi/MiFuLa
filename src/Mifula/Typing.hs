@@ -46,25 +46,44 @@ freshTy = T (Nothing, KStar) . TyVar <$> fresh
 type TySubst = Subst (Tv Typed)
 type TyEq = UEq (Tagged Ty Typed)
 
-unify :: [MonoEnv] -> [Tagged Ty Typed] -> TC (TySubst, MonoEnv, Tagged Ty Typed)
-unify ms τs = do
-    α <- freshTy
-    let eqs = map (:~: α) τs
-        eqs' = concatMap toEqs . Set.toList $ vars
-    θ <- case unifyEqs True (eqs ++ eqs') of
+runUnify :: Bool -> [TyEq] -> TC TySubst
+runUnify allowFlip eqs = do
+    case unifyEqs True eqs of
         Left (eq, err) -> do
             undefined -- emit recoverable error
             return mempty
         Right θ -> return θ
+
+unify :: [MonoEnv] -> [Tagged Ty Typed] -> TC (TySubst, MonoEnv, Tagged Ty Typed)
+unify ms τs = do
+    α <- freshTy
+    let tyEqs = map (:~: α) τs
+    θ <- runUnify True (tyEqs ++ varEqs)
     return (θ, θ ▷ mconcat ms, θ ▷ α)
   where
-    vars :: Set (Var Scoped)
-    vars = mconcat $ map monoVars ms
+    varEqs :: [TyEq]
+    varEqs = concatMap toEqs . Set.toList $ vars
+      where
+        toEqs :: Var Scoped -> [TyEq]
+        toEqs v = case mapMaybe (lookupMonoVar v) ms of
+            [] -> []
+            τ:τs -> map (τ :~:) τs
 
-    toEqs :: Var Scoped -> [TyEq]
-    toEqs v = case mapMaybe (lookupMonoVar v) ms of
-        [] -> []
-        τ:τs -> map (τ :~:) τs
+    vars :: Set (Var Scoped)
+    vars = mconcat . map monoVars $ ms
+
+unifyPoly :: [PolyEnv] -> TC (TySubst, PolyEnv)
+unifyPoly envs = do
+    θ <- runUnify True eqs
+    let env = mconcat envs
+        env' = generalize vars env
+    return (θ, θ ▷ env')
+  where
+    vars :: Set (Var Scoped)
+    vars = mconcat . map polyVars $ envs
+
+    eqs :: [TyEq]
+    eqs = undefined
 
 tyArr :: SourcePos -> Tagged Ty Typed -> Tagged Ty Typed -> Tagged Ty Typed
 tyArr loc t u = tag KStar $ TyApp (tag (KStar `KArr` KStar) $ TyApp fun t) u
