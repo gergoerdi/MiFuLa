@@ -33,6 +33,21 @@ instance HasUVars Typing (Tv Typed) where
 newtype PolyEnv = PolyEnv{ unPolyEnv :: Map (Var Scoped) Typing }
                 deriving (Show, Monoid)
 
+instance SubstUVars PolyEnv (Tv Typed) where
+    θ ▷ env = PolyEnv . fmap (θ ▷) . unPolyEnv $ env
+
+polyVar :: Var Scoped -> Typing -> PolyEnv
+polyVar x tyg = PolyEnv $ Map.singleton x tyg
+
+polyVars :: PolyEnv -> Set (Var Scoped)
+polyVars = Map.keysSet . unPolyEnv
+
+generalize :: Set (Var Scoped) -> PolyEnv -> PolyEnv
+generalize vars = PolyEnv . fmap restrict . unPolyEnv
+  where
+    restrict :: Typing -> Typing
+    restrict (τ :@ m) = τ :@ removeMonoVars vars m
+
 data R = R{ rCons :: Map (Con Scoped) (Tagged Ty Typed)
           , rPolyEnv :: PolyEnv
           }
