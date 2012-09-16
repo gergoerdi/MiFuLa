@@ -37,8 +37,8 @@ inferDefGroup = undefined
 
 inferExpr :: Tagged Expr Scoped -> TC (Tagged Expr Typed, Typing)
 inferExpr expr = do
-    (expr', typing@(τ :@ m)) <- inferExpr_ expr
-    return (T (tag expr, τ) expr', typing)
+    (expr', tyg@(τ :@ m)) <- inferExpr_ expr
+    return (T (tag expr, τ) expr', tyg)
 
 freshTy :: TC (Tagged Ty Typed)
 freshTy = T (Nothing, KStar) . TyVar <$> fresh
@@ -96,19 +96,19 @@ tyArr loc t u = tag KStar $ TyApp (tag (KStar `KArr` KStar) $ TyApp fun t) u
 inferExpr_ :: Tagged Expr Scoped -> TC (Expr Typed, Typing)
 inferExpr_ (T loc expr) = case expr of
     EVar x -> do
-        typing <- do
-            mtyping <- lookupPolyVar x
-            case mtyping of
+        tyg <- do
+            mtyg <- lookupPolyVar x
+            case mtyg of
                 Nothing -> do
                     α <- freshTy
                     return $ monoVar x α
-                Just typing -> instantiate typing
-        return (EVar (ref x), typing)
+                Just tyg -> instantiate tyg
+        return (EVar (ref x), tyg)
     ECon c -> do
         τ <- lookupCon c
-        let typing = τ :@ mempty
-        typing' <- instantiate typing
-        return (ECon (ref c), typing')
+        let tyg = τ :@ mempty
+        tyg' <- instantiate tyg
+        return (ECon (ref c), tyg')
     EApp f arg -> do
         (f', τ₁ :@ m₁) <- inferExpr f
         (arg', τ₂ :@ m₂) <- inferExpr arg
@@ -135,9 +135,9 @@ inferPat (T loc pat) = case pat of
     PCon con pats -> do
         α <- freshTy
         τ <- instantiate =<< lookupCon con
-        (pats', typings') <- unzip <$> mapM inferPat pats
-        let ms = map (\(τ :@ m) -> m) typings'
-            τs = map (\(τ :@ m) -> τ) typings' -- TODO: unzip...
+        (pats', tygs') <- unzip <$> mapM inferPat pats
+        let ms = map (\(τ :@ m) -> m) tygs'
+            τs = map (\(τ :@ m) -> τ) tygs' -- TODO: unzip...
         (θ, m, _) <- unify ms [τ, foldr (tyArr loc) α τs]
         let τ' = θ ▷ α
         case τ' of
