@@ -34,8 +34,14 @@ ref (IdRef name x) = IdRef name x
 inferDefs :: Defs Scoped -> TC (Defs Typed, PolyEnv)
 inferDefs (DefsGrouped defss) = do
     -- TODO: fold envs
-    (defss', envs) <- unzip <$> mapM inferDefGroup defss
+    (defss', envs) <- go defss
     return (DefsGrouped defss', mconcat envs)
+  where
+    go (defs:defss) = do
+        (defs', env) <- inferDefGroup defs
+        (defss', envs) <- withEnv env $ go defss
+        return (defs':defss', env:envs)
+    go [] = return ([], [])
 
 inferDefGroup :: [Tagged Def Scoped] -> TC ([Tagged Def Typed], PolyEnv)
 inferDefGroup defs = do
@@ -93,7 +99,7 @@ runUnify :: Bool -> [TyEq] -> TC TySubst
 runUnify allowFlip eqs = do
     case unifyEqs True eqs of
         Left (eq, err) -> do
-            undefined -- emit recoverable error
+            undefined -- TODO: emit recoverable error
             return mempty
         Right θ -> return θ
 
@@ -166,8 +172,8 @@ inferExpr_ (T loc expr) = case expr of
         return (ELam (θ ▷ pat') (θ ▷ body'), τ :@ m')
     ELet defs body -> do
         (defs', env) <- inferDefs defs
-        (body', τBody :@ mBody) <- undefined env $ inferExpr body
-        (θ, τ :@ m) <- undefined
+        (body', τBody :@ mBody) <- withEnv env $ inferExpr body
+        (θ, τ :@ m) <- undefined -- TODO
         return (ELet (θ ▷ defs') (θ ▷ body'), τ :@ m)
 
 inferPat :: Tagged Pat Scoped -> TC (Tagged Pat Typed, Typing)
