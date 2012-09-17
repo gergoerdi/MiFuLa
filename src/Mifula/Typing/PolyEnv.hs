@@ -1,7 +1,12 @@
 {-# LANGUAGE DataKinds, GADTs #-}
 {-# LANGUAGE MultiParamTypeClasses, FlexibleInstances #-}
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
-module Mifula.Typing.PolyEnv where
+module Mifula.Typing.PolyEnv
+       ( PolyEnv
+       , polyVar, polyVars
+       , polyMonos, lookupPolyVar
+       , generalize
+       ) where
 
 import Mifula.Syntax
 import Mifula.Unify.UVar
@@ -37,6 +42,9 @@ polyVars = Map.keysSet . unPolyEnv
 
 polyMonos :: PolyEnv -> [MonoEnv]
 polyMonos = map (\(τ :@ m) -> m) . Map.elems . unPolyEnv
+
+lookupPolyVar :: Var Scoped -> PolyEnv -> Maybe Typing
+lookupPolyVar var = Map.lookup var . unPolyEnv
 
 generalize :: Set (Var Scoped) -> PolyEnv -> PolyEnv
 generalize vars = PolyEnv . fmap restrict . unPolyEnv

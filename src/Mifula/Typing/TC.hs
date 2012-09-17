@@ -39,8 +39,8 @@ internalError s = error $ unwords ["Internal error:", s]
 -- noteError :: UnificationError (Tv Typed) (Tagged Ty Typed) -> TC ()
 -- noteError = undefined
 
-lookupPolyVar :: Var Scoped -> TC (Maybe Typing)
-lookupPolyVar var = TC . asks $ Map.lookup var . unPolyEnv . rPolyEnv
+lookupVar :: Var Scoped -> TC (Maybe Typing)
+lookupVar var = TC . asks $ lookupPolyVar var . rPolyEnv
 
 lookupCon :: Con Scoped -> TC (Tagged Ty Typed)
 lookupCon con =

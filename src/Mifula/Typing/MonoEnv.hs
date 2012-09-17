@@ -1,7 +1,11 @@
 {-# LANGUAGE DataKinds #-}
 {-# LANGUAGE MultiParamTypeClasses, FlexibleInstances #-}
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
-module Mifula.Typing.MonoEnv where
+module Mifula.Typing.MonoEnv
+       ( Typing(..), MonoEnv
+       , monoVar, monoVars
+       , removeMonoVars, lookupMonoVar
+       ) where
 
 import Mifula.Syntax
 import Mifula.Unify.UVar

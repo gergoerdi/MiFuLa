@@ -140,7 +140,7 @@ inferExpr_ :: Tagged Expr Scoped -> TC (Expr Typed, Typing)
 inferExpr_ (T loc expr) = case expr of
     EVar x -> do
         tyg <- do
-            mtyg <- lookupPolyVar x
+            mtyg <- lookupVar x
             case mtyg of
                 Nothing -> do
                     α <- freshTy
