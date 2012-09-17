@@ -1,4 +1,4 @@
-{-# LANGUAGE DataKinds #-}
+{-# LANGUAGE DataKinds, GADTs #-}
 import Mifula.Syntax
 import Mifula.Syntax.Pretty ()
 import Mifula.Parse (defs, parseWhole)
@@ -45,20 +45,16 @@ main = do
             Right x -> x
     print $ pretty foo'
     putStrLn "--==================--"
-    print conIDs
+    -- print conIDs
     let conMap :: Map (Con Scoped) (Tagged Ty Typed)
         conMap = Map.fromList . map f . Set.toList $ conIDs
           where
             f con = (con, cons ! refName con)
-    forM_ (Map.toList conMap) $ \(con, ty) -> do
-        print con
-        print $ pretty ty
-    let foo'' = runTC conMap mempty (inferDefs foo')
-    print foo''
-    -- return foo'
-  -- where
-  --   cons :: Map (Con Scoped) (Tagged Ty Typed)
-    -- cons = Map.fromList [
+    -- forM_ (Map.toList conMap) $ \(con, ty) -> do
+    --     print con
+    --     print $ pretty ty
+    let (foo'', env) = runTC conMap mempty (inferDefs foo')
+    print $ pretty env
   where
     tyList :: Tagged Ty Typed -> Tagged Ty Typed
     tyList = T (Nothing, KStar) . TyApp (T (Nothing, KStar `KArr` KStar) tyCon)
