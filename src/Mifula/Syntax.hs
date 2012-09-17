@@ -19,7 +19,6 @@ module Mifula.Syntax
 
 import Mifula.Id
 
-import Data.Default
 import Text.ParserCombinators.Parsec.Pos (SourcePos, initialPos)
 import Mifula.Unify.UVar
 
