@@ -2,6 +2,8 @@
 {-# LANGUAGE FlexibleContexts #-}
 module Mifula.Typing (inferDefs) where
 
+import Mifula.Typing.MonoEnv
+import Mifula.Typing.PolyEnv
 import Mifula.Typing.TC
 import Mifula.Unify.UVar
 import Mifula.Unify.UEq
@@ -11,7 +13,7 @@ import Mifula.Syntax
 import Control.Applicative
 import Mifula.Fresh
 import Data.Monoid
-import Data.Maybe (mapMaybe, fromMaybe)
+import Data.Maybe (mapMaybe)
 import Data.Foldable (foldlM)
 
 import Data.Set (Set)
