@@ -1,6 +1,7 @@
 {-# LANGUAGE DataKinds, GADTs #-}
 {-# LANGUAGE MultiParamTypeClasses, FlexibleInstances #-}
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
+{-# LANGUAGE RecordWildCards #-}
 module Mifula.Typing.TC where
 
 import Mifula.Fresh
@@ -8,6 +9,7 @@ import Mifula.Syntax
 import Mifula.Typing.MonoEnv
 import Mifula.Typing.PolyEnv
 import Control.Applicative
+import Data.Monoid
 import Data.Map (Map)
 import qualified Data.Map as Map
 
@@ -38,6 +40,11 @@ internalError s = error $ unwords ["Internal error:", s]
 
 -- noteError :: UnificationError (Tv Typed) (Tagged Ty Typed) -> TC ()
 -- noteError = undefined
+
+withEnv :: PolyEnv -> TC a -> TC a
+withEnv env = TC . local addEnv . unTC
+  where
+    addEnv r@R{..} = r{ rPolyEnv = env <> rPolyEnv }
 
 lookupVar :: Var Scoped -> TC (Maybe Typing)
 lookupVar var = TC . asks $ lookupPolyVar var . rPolyEnv
