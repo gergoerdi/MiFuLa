@@ -32,7 +32,7 @@ instance SubstUVars PolyEnv (Tv Typed) where
 instance Pretty PolyEnv where
     pretty = vcat . map (uncurry var) . Map.toList . unPolyEnv
       where
-        var x (τ :@ m) = pretty x <+> text "::" <+> pretty τ
+        var x tyg = pretty x <+> text "∷" <+> pretty tyg
 
 polyVar :: Var Scoped -> Typing -> PolyEnv
 polyVar x tyg = PolyEnv $ Map.singleton x tyg
