@@ -168,18 +168,13 @@ def = loc $ try defVar <|> defFun
         ms <- many1 $ match fun
         return $ DefFun fun ms
 
-parseWhole :: P a -> P a
-parseWhole p = do
-    x <- p
-    eof
-    return x
-tdef :: P (Tagged TDef Parsed)
-tdef = loc tdData
+tydef :: P (Tagged TyDef Parsed)
+tydef = loc tdData
   where
     tdData = do
         reserved "data"
         name <- conname
-        formals <- many tv
+        formals <- many varname
         reservedOp "="
         cons <- IP.lineFold $ conDef `sepBy1` reservedOp "|"
         return $ TDData name formals cons
@@ -196,5 +191,5 @@ program = do
     eof
     return prog
   where
-    program' = many $ (DeclTDef <$> tdef) <|> (DeclDef <$> def)
+    program' = many $ (DeclTyDef <$> tydef) <|> (DeclDef <$> def)
 

@@ -1,6 +1,6 @@
 {-# LANGUAGE DataKinds #-}
 {-# LANGUAGE GADTs #-}
-module Mifula.Scope (scopeDefs) where
+module Mifula.Scope (scopeDefs, scopeTyDefT) where
 
 import Mifula.Syntax
 import Mifula.Scope.SC
@@ -12,8 +12,11 @@ import qualified Data.Graph as G
 import Data.Set (Set)
 import qualified Data.Set as Set
 
-scopeDefs :: Defs Parsed -> SC (Defs Scoped, Set (Var Scoped))
-scopeDefs (DefsUngrouped defs) = do
+scopeDefs :: Defs Parsed -> SC (Defs Scoped)
+scopeDefs = fmap fst . scopeDefs'
+
+scopeDefs' :: Defs Parsed -> SC (Defs Scoped, Set (Var Scoped))
+scopeDefs' (DefsUngrouped defs) = do
     -- TODO: check conflicting names
     defsWithNames <- forM defs $ \def -> do
         var <- freshVar $ defName . unTag $ def
@@ -34,6 +37,31 @@ scopeDef def = case def of
             DefVar <$> defVar var <*> pure locals' <*> scopeExprT body
     DefFun fun matches ->
         DefFun <$> defVar fun <*> mapM (liftTag scopeMatch) matches
+
+scopeTyDefT :: Tagged TyDef Parsed -> SC (Tagged TyDef Scoped)
+scopeTyDefT = liftTag scopeTyDef
+
+scopeTyDef :: TyDef Parsed -> SC (TyDef Scoped)
+scopeTyDef tydef = case tydef of
+    TDAlias name tvs τ ->
+        withScopedTyVars (map TvNamed tvs) $ \tvs' ->
+          TDAlias <$> refTyCon name <*> pure (map tvName tvs') <*> liftTag scopeTy τ
+    TDData name tvs cons -> do
+        withScopedTyVars (map TvNamed tvs) $ \tvs' ->
+          TDData <$> refTyCon name <*> pure (map tvName tvs') <*> mapM (liftTag scopeConDef) cons
+  where
+    tvName (TvNamed ref) = ref
+
+scopeConDef :: ConDef Parsed -> SC (ConDef Scoped)
+scopeConDef con = case con of
+    ConDef name τ -> ConDef <$> refCon name <*> mapM (liftTag scopeTy) τ
+
+scopeTy :: Ty Parsed -> SC (Ty Scoped)
+scopeTy τ = case τ of
+    TyCon con -> TyCon <$> refTyCon con
+    TyVar tv -> TyVar <$> refTv tv
+    TyApp t u -> TyApp <$> liftTag scopeTy t <*> liftTag scopeTy u
+    TyFun -> pure TyFun
 
 scopeMatch :: Match Parsed -> SC (Match Scoped)
 scopeMatch (Match pats locals body) = do
@@ -66,10 +94,17 @@ withPats pats f = do
     -- TODO: check conflicts
     withVars (Set.unions pvarss) $ f pats'
 
+withScopedTyVars :: [Tv Parsed] -> ([Tv Scoped] -> SC a) -> SC a
+withScopedTyVars tvs f = do
+    -- TODO: check conflicting names
+    tvs' <- mapM (fmap TvNamed . freshRef . tvName) tvs
+    withTyVars (Set.fromList tvs') $ f tvs'
+  where
+    tvName (TvNamed ref) = ref
 
 withDefs :: Defs Parsed -> (Defs Scoped -> SC a) -> SC a
 withDefs defs f = do
-    (defs', newVars) <- scopeDefs defs
+    (defs', newVars) <- scopeDefs' defs
     withVars newVars $ f defs'
 
 scopePat :: Pat Parsed -> SC (Pat Scoped)
