@@ -13,6 +13,8 @@ module Mifula.Syntax
        , Kv, InOut(..), Kind(..)
        , Expr(..), Pat(..)
        , Match(..), Def(..), Defs(..)
+       , TDef(..), ConDef(..)
+       , Decl(..)
        , defName
        , SourcePos, noPos
        ) where
@@ -156,10 +158,20 @@ type instance ScopedPass Scoped = True
 type instance ScopedPass Kinded = True
 type instance ScopedPass Typed = True
 
+data Decl = DeclDef (Tagged Def Parsed)
+          | DeclTDef (Tagged TDef Parsed)
+
 data Defs π where
     DefsUngrouped :: (ScopedPass π ~ False) => [Tagged Def π] -> Defs π
     DefsGrouped :: (ScopedPass π ~ True) => [[Tagged Def π]] -> Defs π
 deriving instance (Show (Tag Def π), Show (Tag Expr π), Show (Tag Match π), Show (Tag Pat π)) => Show (Defs π)
+
+data TDef π = TDAlias (TyCon π) (Tagged Ty π)
+            | TDData (TyCon π) [Tv π] [Tagged ConDef π]
+deriving instance (Show (Tag Ty π), Show (Tag ConDef π)) => Show (TDef π)
+
+data ConDef π = ConDef (Con π) [Tagged Ty π]
+deriving instance (Show (Tag Ty π)) => Show (ConDef π)
 
 instance SubstUVars (Defs Typed) (Tv Typed) where
     θ ▷ (DefsGrouped defss) = DefsGrouped (θ ▷ defss)
@@ -223,6 +235,12 @@ instance SubstUVars (Tagged Expr Typed) (Tv Typed) where
 
 noPos :: SourcePos
 noPos = initialPos ""
+
+instance AST TDef where
+    type TagKinded TDef = (Tag TDef Scoped, Kind Out)
+
+instance AST ConDef where
+    type TagTyped ConDef = (Tag ConDef Kinded, Tagged Ty Typed)
 
 instance AST Ty where
     type TagKinded Ty = (Maybe (Tag Ty Scoped), Kind Out)
