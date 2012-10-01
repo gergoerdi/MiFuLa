@@ -28,10 +28,10 @@ instantiate x = do
         contract α <$> freshTy <*> pure θ >>=
         maybe (internalError "fresh variable occurs in type") return
 
-ref :: Ref Scoped -> Ref Typed
+ref :: Ref Kinded -> Ref Typed
 ref (IdRef name x) = IdRef name x
 
-inferDefs :: Defs Scoped -> TC (Defs Typed, PolyEnv)
+inferDefs :: Defs Kinded -> TC (Defs Typed, PolyEnv)
 inferDefs (DefsGrouped defss) = do
     -- TODO: fold envs
     (defss', envs) <- go defss
@@ -43,18 +43,18 @@ inferDefs (DefsGrouped defss) = do
         return (defs':defss', env:envs)
     go [] = return ([], [])
 
-inferDefGroup :: [Tagged Def Scoped] -> TC ([Tagged Def Typed], PolyEnv)
+inferDefGroup :: [Tagged Def Kinded] -> TC ([Tagged Def Typed], PolyEnv)
 inferDefGroup defs = do
     (defs', envs) <- unzip <$> mapM inferDef defs
     (θ, env) <- unifyPoly envs
     return (θ ▷ defs', env)
   where
-    inferDef :: Tagged Def Scoped -> TC (Tagged Def Typed, PolyEnv)
+    inferDef :: Tagged Def Kinded -> TC (Tagged Def Typed, PolyEnv)
     inferDef (T loc def) = do
         (x, def', tyg@(τ :@ _)) <- inferDef_ def
         return (T (loc, τ) def', polyVar x tyg)
 
-    inferDef_ :: Def Scoped -> TC (Var Scoped, Def Typed, Typing)
+    inferDef_ :: Def Kinded -> TC (Var Kinded, Def Typed, Typing)
     inferDef_ def = case def of
         DefVar x locals body -> do
             -- TODO: locals
@@ -70,7 +70,7 @@ inferDefGroup defs = do
             (θ, m, τ) <- unify ms τs
             return (fun, DefFun (ref fun) (θ ▷ matches'), τ :@ m)
 
-    inferMatch :: Tagged Match Scoped -> TC (Tagged Match Typed, Typing)
+    inferMatch :: Tagged Match Kinded -> TC (Tagged Match Typed, Typing)
     inferMatch (T loc (Match pats locals body)) = do
         (pats', patTygs) <- unzip <$> mapM inferPat pats
         let mPats = map (\(τ :@ m) -> m) patTygs
@@ -84,7 +84,7 @@ inferDefGroup defs = do
         let m' = removeMonoVars (Set.unions $ map monoVars mPats) m
         return (T loc $ Match (θ ▷ pats') (θ ▷ locals') (θ ▷ body'), τ :@ m')
 
-inferExpr :: Tagged Expr Scoped -> TC (Tagged Expr Typed, Typing)
+inferExpr :: Tagged Expr Kinded -> TC (Tagged Expr Typed, Typing)
 inferExpr expr = do
     (expr', tyg@(τ :@ m)) <- inferExpr_ expr
     return (T (tag expr, τ) expr', tyg)
@@ -113,12 +113,12 @@ unify ms τs = do
     varEqs :: [TyEq]
     varEqs = concatMap toEqs . Set.toList $ vars
       where
-        toEqs :: Var Scoped -> [TyEq]
+        toEqs :: Var Kinded -> [TyEq]
         toEqs v = case mapMaybe (lookupMonoVar v) ms of
             [] -> []
             τ:τs -> map (τ :~:) τs
 
-    vars :: Set (Var Scoped)
+    vars :: Set (Var Kinded)
     vars = mconcat . map monoVars $ ms
 
 unifyPoly :: [PolyEnv] -> TC (TySubst, PolyEnv)
@@ -128,7 +128,7 @@ unifyPoly envs = do
         env' = generalize vars env
     return (θ, θ ▷ env')
   where
-    vars :: Set (Var Scoped)
+    vars :: Set (Var Kinded)
     vars = mconcat . map polyVars $ envs
 
     ms :: [MonoEnv]
@@ -142,7 +142,7 @@ tyArr loc t u = tag KStar $ TyApp (tag (KStar `KArr` KStar) $ TyApp fun t) u
 
     fun = tag (KStar `KArr` KStar `KArr` KStar) TyFun
 
-inferExpr_ :: Tagged Expr Scoped -> TC (Expr Typed, Typing)
+inferExpr_ :: Tagged Expr Kinded -> TC (Expr Typed, Typing)
 inferExpr_ (T loc expr) = case expr of
     EVar x -> do
         tyg <- do
@@ -176,7 +176,7 @@ inferExpr_ (T loc expr) = case expr of
         (θ, τ :@ m) <- undefined -- TODO
         return (ELet (θ ▷ defs') (θ ▷ body'), τ :@ m)
 
-inferPat :: Tagged Pat Scoped -> TC (Tagged Pat Typed, Typing)
+inferPat :: Tagged Pat Kinded -> TC (Tagged Pat Typed, Typing)
 inferPat (T loc pat) = case pat of
     PVar x -> do
         α <- freshTy

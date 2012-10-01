@@ -23,7 +23,7 @@ import Text.PrettyPrint.Leijen hiding ((<$>))
 -- key, so we might as well use an IntMap if it turns out to be more
 -- performant.
 
-newtype PolyEnv = PolyEnv{ unPolyEnv :: Map (Var Scoped) Typing }
+newtype PolyEnv = PolyEnv{ unPolyEnv :: Map (Var Kinded) Typing }
                 deriving (Show, Monoid)
 
 instance SubstUVars PolyEnv (Tv Typed) where
@@ -34,19 +34,19 @@ instance Pretty PolyEnv where
       where
         var x tyg = pretty x <+> text "∷" <+> pretty tyg
 
-polyVar :: Var Scoped -> Typing -> PolyEnv
+polyVar :: Var Kinded -> Typing -> PolyEnv
 polyVar x tyg = PolyEnv $ Map.singleton x tyg
 
-polyVars :: PolyEnv -> Set (Var Scoped)
+polyVars :: PolyEnv -> Set (Var Kinded)
 polyVars = Map.keysSet . unPolyEnv
 
 polyMonos :: PolyEnv -> [MonoEnv]
 polyMonos = map (\(τ :@ m) -> m) . Map.elems . unPolyEnv
 
-lookupPolyVar :: Var Scoped -> PolyEnv -> Maybe Typing
+lookupPolyVar :: Var Kinded -> PolyEnv -> Maybe Typing
 lookupPolyVar var = Map.lookup var . unPolyEnv
 
-generalize :: Set (Var Scoped) -> PolyEnv -> PolyEnv
+generalize :: Set (Var Kinded) -> PolyEnv -> PolyEnv
 generalize vars = PolyEnv . fmap restrict . unPolyEnv
   where
     restrict :: Typing -> Typing

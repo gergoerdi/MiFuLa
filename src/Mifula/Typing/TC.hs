@@ -15,7 +15,7 @@ import qualified Data.Map as Map
 
 import Control.Monad.Reader
 
-data R = R{ rCons :: Map (Con Scoped) (Tagged Ty Typed)
+data R = R{ rCons :: Map (Con Kinded) (Tagged Ty Typed)
           , rPolyEnv :: PolyEnv
           }
        deriving Show
@@ -26,7 +26,7 @@ newtype TC a = TC{ unTC :: ReaderT R SupplyId a }
 instance MonadFresh (Tv Typed) TC where
     fresh = TvFresh <$> (TC . lift $ fresh)
 
-runTC :: Map (Con Scoped) (Tagged Ty Typed)
+runTC :: Map (Con Kinded) (Tagged Ty Typed)
       -> PolyEnv
       -> TC a -> a -- TODO: errors
 runTC cons polyEnv tc = runSupplyId $ runReaderT (unTC tc) r
@@ -46,10 +46,10 @@ withEnv env = TC . local addEnv . unTC
   where
     addEnv r@R{..} = r{ rPolyEnv = env <> rPolyEnv }
 
-lookupVar :: Var Scoped -> TC (Maybe Typing)
+lookupVar :: Var Kinded -> TC (Maybe Typing)
 lookupVar var = TC . asks $ lookupPolyVar var . rPolyEnv
 
-lookupCon :: Con Scoped -> TC (Tagged Ty Typed)
+lookupCon :: Con Kinded -> TC (Tagged Ty Typed)
 lookupCon con =
     (TC . asks $ Map.lookup con . rCons) >>=
     maybe (internalError $ unwords ["constructor not found:", show con]) return

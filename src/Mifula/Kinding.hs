@@ -12,8 +12,11 @@ import Control.Monad.Identity
 -- When either type signatures or datatype definitions are added, this
 -- will need to become substantial.
 
-newtype KC a = KC{ runKC :: Identity a }
+newtype KC a = KC{ unKC :: Identity a }
              deriving (Functor, Applicative, Monad)
+
+runKC :: KC a -> a
+runKC = runIdentity . unKC
 
 liftTag :: (AST a, Tag a Scoped ~ Tag a Kinded)
         => (a Scoped -> KC (a Kinded))

@@ -33,7 +33,7 @@ instance SubstUVars Typing (Tv Typed) where
 instance HasUVars Typing (Tv Typed) where
     uvars (τ :@ m) = uvars τ <> uvars m
 
-newtype MonoEnv = MonoEnv{ monoVarMap :: Map (Var Scoped) (Tagged Ty Typed) }
+newtype MonoEnv = MonoEnv{ monoVarMap :: Map (Var Kinded) (Tagged Ty Typed) }
                 deriving (Monoid, Show)
 
 instance Pretty MonoEnv where
@@ -48,16 +48,16 @@ instance SubstUVars MonoEnv (Tv Typed) where
 instance HasUVars MonoEnv (Tv Typed) where
     uvars = foldMap uvars . monoVarMap
 
-monoVar :: Var Scoped -> Tagged Ty Typed -> Typing
+monoVar :: Var Kinded -> Tagged Ty Typed -> Typing
 monoVar x τ = τ :@ m
   where
     m = MonoEnv $ Map.singleton x τ
 
-monoVars :: MonoEnv -> Set (Var Scoped)
+monoVars :: MonoEnv -> Set (Var Kinded)
 monoVars = Map.keysSet . monoVarMap
 
-removeMonoVars :: Set (Var Scoped) -> MonoEnv -> MonoEnv
+removeMonoVars :: Set (Var Kinded) -> MonoEnv -> MonoEnv
 removeMonoVars xs = MonoEnv . (foldr Map.delete `flip` xs) . monoVarMap
 
-lookupMonoVar :: Var Scoped -> MonoEnv -> Maybe (Tagged Ty Typed)
+lookupMonoVar :: Var Kinded -> MonoEnv -> Maybe (Tagged Ty Typed)
 lookupMonoVar x = Map.lookup x . monoVarMap

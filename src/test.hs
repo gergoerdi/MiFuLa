@@ -4,6 +4,7 @@ import Mifula.Syntax.Pretty ()
 import Mifula.Parse (defs, parseWhole)
 import Mifula.Scope (scopeDefs)
 import Mifula.Scope.SC (runSC)
+import Mifula.Kinding (runKC, kindDefs)
 import Mifula.Typing (inferDefs)
 import Mifula.Typing.TC (runTC)
 
@@ -20,8 +21,8 @@ import Data.Monoid
 
 import Prelude hiding (mapM)
 
-foo :: Defs Parsed
-foo = parseD prog
+defsP :: Defs Parsed
+defsP = parseD prog
   where
     prog = unlines [ "id x = x"
                    , "id' = id (λ x → x)"
@@ -38,22 +39,22 @@ foo = parseD prog
         Left err -> error (show err)
 
 main = do
-    print $ pretty foo
+    print $ pretty defsP
     putStrLn "--==================--"
-    let (conIDs, foo') = case runSC conNames $ fmap fst $ scopeDefs foo of
+
+    let (conIDs, defsS) = case runSC conNames $ fmap fst $ scopeDefs defsP of
             Left err -> error $ show err
             Right x -> x
-    print $ pretty foo'
+    print $ pretty defsS
     putStrLn "--==================--"
-    -- print conIDs
-    let conMap :: Map (Con Scoped) (Tagged Ty Typed)
+
+    let defsK = runKC $ kindDefs defsS
+
+    let conMap :: Map (Con Kinded) (Tagged Ty Typed)
         conMap = Map.fromList . map f . Set.toList $ conIDs
           where
-            f con = (con, cons ! refName con)
-    -- forM_ (Map.toList conMap) $ \(con, ty) -> do
-    --     print con
-    --     print $ pretty ty
-    let (foo'', env) = runTC conMap mempty (inferDefs foo')
+            f (IdRef x id)  = (IdRef x id, cons ! x)
+    let (defsT, env) = runTC conMap mempty (inferDefs defsK)
     print $ pretty env
   where
     tyList :: Tagged Ty Typed -> Tagged Ty Typed
