@@ -20,8 +20,8 @@ import Control.Applicative ((<$>)) -- IndentParser uses Parsec 2, which doesn't 
 type P a = IP.IndentCharParser () a
 
 lexer = T.makeTokenParser $ L.haskellStyle {
-    T.reservedNames = ["let", "in", "where"],
-    T.reservedOpNames = ["λ", "\\", "→", "->", "=", "_"]
+    T.reservedNames = ["let", "in", "where", "data"],
+    T.reservedOpNames = ["λ", "\\", "→", "->", "=", "_", "|"]
     }
 
 brackets   = IT.brackets lexer
@@ -54,14 +54,17 @@ varname = do
     guard $ isLower n
     return $ NameRef name
 
+tv :: P (Tv Parsed)
+tv = TvNamed <$> varname
+
 loc p = do
     pos <- getPos
     T pos <$> p
 
-getPos :: IP.IndentCharParser () SourcePos
+getPos :: P SourcePos
 getPos = getPosition
 
-ty :: IP.IndentCharParser () (Tagged Ty Parsed)
+ty :: P (Tagged Ty Parsed)
 ty = buildExpressionParser table term <?> "type expression"
   where
     table = [ [Infix tyApp AssocRight]
@@ -78,10 +81,10 @@ ty = buildExpressionParser table term <?> "type expression"
         -- whiteSpace
         pos <- getPos
         return $ \t u -> T pos $ TyApp t u
-    tyVar = TyVar <$> (TvNamed <$> varname)
+    tyVar = TyVar <$> tv
     tyCon = TyCon <$> conname
 
-pat :: Bool -> IP.IndentCharParser () (Tagged Pat Parsed)
+pat :: Bool -> P (Tagged Pat Parsed)
 pat needParens = pCon' <|> try pWildcard <|> pVar <|> parens (pat False)
   where
     pVar = loc $ PVar <$> varname
@@ -101,7 +104,7 @@ pat needParens = pCon' <|> try pWildcard <|> pVar <|> parens (pat False)
         reservedOp "_"
         return $ PWildcard
 
-locals :: IP.IndentCharParser () (Defs Parsed)
+locals :: P (Defs Parsed)
 locals = do
     mlocals <- optionMaybe $ IP.block $ do
         reservedOp "where"
@@ -110,7 +113,7 @@ locals = do
   where
     noLocals = DefsUngrouped []
 
-match :: Var Parsed -> IP.IndentCharParser () (Tagged Match Parsed)
+match :: Var Parsed -> P (Tagged Match Parsed)
 match f = try $ loc $ do
     f' <- varname
     guard $ f' == f
@@ -120,7 +123,7 @@ match f = try $ loc $ do
     locals <- locals
     return $ Match pats locals body
 
-expr :: IP.IndentCharParser () (Tagged Expr Parsed)
+expr :: P (Tagged Expr Parsed)
 expr = buildExpressionParser table term <?> "expression"
   where
     table = [[Infix eApp AssocLeft]]
@@ -147,10 +150,10 @@ expr = buildExpressionParser table term <?> "expression"
         body <- expr
         return $ ELet (DefsUngrouped defs) body
 
-defs :: IP.IndentCharParser () (Defs Parsed)
+defs :: P (Defs Parsed)
 defs = DefsUngrouped <$> many1 def
 
-def :: IP.IndentCharParser () (Tagged Def Parsed)
+def :: P (Tagged Def Parsed)
 def = loc $ try defVar <|> defFun
   where
     defVar = do
@@ -165,15 +168,33 @@ def = loc $ try defVar <|> defFun
         ms <- many1 $ match fun
         return $ DefFun fun ms
 
+parseWhole :: P a -> P a
 parseWhole p = do
     x <- p
     eof
     return x
+tdef :: P (Tagged TDef Parsed)
+tdef = loc tdData
+  where
+    tdData = do
+        reserved "data"
+        name <- conname
+        formals <- many tv
+        reservedOp "="
+        cons <- IP.lineFold $ conDef `sepBy1` reservedOp "|"
+        return $ TDData name formals cons
 
-{-
-program = do (decls, defs) <- liftM partitionEithers $ many $ whiteSpace >> (decl <|> vardef)
-             return $ Program decls defs
+conDef :: P (Tagged ConDef Parsed)
+conDef = loc $ do
+    name <- conname
+    tys <- many ty
+    return $ ConDef name tys
 
-    where decl = Left <$> typedecl
-          vardef = Right <$> def
--}
+program :: P [Decl]
+program = do
+    prog <- program'
+    eof
+    return prog
+  where
+    program' = many $ (DeclTDef <$> tdef) <|> (DeclDef <$> def)
+
