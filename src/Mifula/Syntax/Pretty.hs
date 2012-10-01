@@ -9,11 +9,12 @@
 module Mifula.Syntax.Pretty () where
 
 import Mifula.Syntax
+import Mifula.Syntax.Readable
 
 import Text.PrettyPrint.Leijen hiding ((<$>))
 import Mifula.Unify.UVar
 
-import Control.Applicative
+import Control.Applicative hiding (empty)
 import Control.Monad.State
 import Control.Monad.Writer hiding ((<>))
 import Data.Set (Set)
@@ -32,59 +33,30 @@ instance Pretty (Ref π) where
         NameRef s -> text s
         IdRef s _ -> text s
 
-instance Pretty (Ty π) where
-    pretty τ = evalState (go 0 τ) (mempty, niceNames)
+-- We can only pretty-print types that don't contain generated type
+-- variables.
+instance Pretty (Ty Parsed) where
+    pretty = go 0
       where
-        tvNames :: Set String
-        tvNames = Set.fromList . mapMaybe nameOf . Set.toList $ uvars τ
-          where
-            nameOf (TvNamed ref) = Just $ refName ref
-            nameOf (TvFresh _) = Nothing
-
-        prepend :: [a] -> Stream a -> Stream a
-        prepend (x:xs) ys = Cons x $ prepend xs ys
-        prepend [] ys = ys
-
-        niceNames :: Stream String
-        niceNames = Stream.filter unused $ prepend preferred failsafe
-          where
-            preferred = ["α", "β", "γ"] ++ map (:[]) ['a'..'z']
-            failsafe = fmap (\i -> 't':show i) $ Stream.iterate succ 1
-            unused = not . (`Set.member` tvNames)
-
-        niceName :: Id -> State (Map Id String, Stream String) String
-        niceName x = do
-            mapping <- gets fst
-            case Map.lookup x mapping of
-                Just s -> return s
-                Nothing -> do
-                    (Cons s ss) <- gets snd
-                    let mapping' = Map.insert x s mapping
-                    put (mapping', ss)
-                    return s
-
-        goT :: Int -> Tagged Ty π -> State (Map Id String, Stream String) Doc
         goT prec = go prec . unTag
 
-        go :: Int -> Ty π -> State (Map Id String, Stream String) Doc
         go prec ty = case ty of
             TyCon con ->
-                return $ pretty con
-            TyVar α ->
-                case α of
-                    TvNamed ref -> return $ pretty ref
-                    TvFresh id -> text <$> niceName id
+                pretty con
+            TyVar (TvNamed ref) ->
+                pretty ref
             TyApp (T _ (TyApp (T _ TyFun) t)) u ->
-                paren arr_prec <$> (arr <$> goT (arr_prec + 1) t <*> goT 0 u)
+                paren arr_prec $ t ~> u
             TyApp t u ->
-                paren app_prec <$> ((<+>) <$> goT 0 t <*> goT (app_prec + 1) u)
+                paren app_prec $ goT 0 t <+> goT (app_prec + 1) u
             TyFun ->
-                return $ text "(→)"
+                text "(→)"
           where
             app_prec = 10
             arr_prec = 5
             paren lim = if prec > lim then parens else id
             arr f x = f <+> text "→" <+> x
+            t ~> u = arr (goT (arr_prec + 1) t) (goT 0 u)
 
 instance Pretty (Defs π) where
     pretty defs = case defs of
@@ -141,3 +113,22 @@ instance Pretty (Expr π) where
             app_prec = 10
             lam_prec = 5
             paren lim = if prec > lim then parens else id
+
+instance Pretty (TyDef Parsed) where
+    pretty tydef = case tydef of
+        TDAlias name formals τ ->
+            text "type" <+> pretty name <+> hsep (map pretty formals)
+            <+> equals <+> pretty τ
+        TDData name formals cons ->
+            text "data" <+> pretty name <+> hsep (map pretty formals)
+            <+> enclose (map pretty cons)
+      where
+        enclose = encloseSep (equals <+> empty) empty (text "| ")
+
+instance Pretty (ConDef Parsed) where
+    pretty (ConDef con args) = pretty con <+> hsep (map pretty args)
+
+instance Pretty Decl where
+    pretty decl = case decl of
+        DeclDef def -> pretty def
+        DeclTyDef tydef -> pretty tydef

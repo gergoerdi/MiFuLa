@@ -3,6 +3,7 @@
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
 module Mifula.Typing.MonoEnv
        ( Typing(..), MonoEnv
+       , prettyTyping, prettyMonoEnv
        , monoVar, monoVars
        , removeMonoVars, lookupMonoVar
        ) where
@@ -16,16 +17,23 @@ import qualified Data.Set as Set
 import Data.Monoid
 import Prelude hiding (foldr)
 import Data.Foldable (foldMap, foldr)
+import Control.Monad (forM)
+import Control.Applicative ((<$>))
 
 import Mifula.Syntax.Pretty ()
+import Mifula.Syntax.Readable
 import Text.PrettyPrint.Leijen hiding ((<$>), (<>))
 
 data Typing = Tagged Ty Typed :@ MonoEnv
             deriving Show
 
-instance Pretty Typing where
-    pretty (τ :@ m) = if Set.null (monoVars m) then pretty τ
-                      else pretty m <+> text "⊢" <+> pretty τ
+prettyTyping :: Typing -> Readable Doc
+prettyTyping (τ :@ m)
+  | Set.null (monoVars m) = pretty <$> readableTyT τ
+  | otherwise = do
+      τ' <- readableTyT τ
+      env <- prettyMonoEnv m
+      return $ env <+> text "⊢" <+> pretty τ'
 
 instance SubstUVars Typing (Tv Typed) where
     θ ▷ (τ :@ m) = (θ ▷ τ) :@ (θ ▷ m)
@@ -36,11 +44,15 @@ instance HasUVars Typing (Tv Typed) where
 newtype MonoEnv = MonoEnv{ monoVarMap :: Map (Var Kinded) (Tagged Ty Typed) }
                 deriving (Monoid, Show)
 
-instance Pretty MonoEnv where
-    pretty = enclose . map (uncurry prettyMono) . Map.toList . monoVarMap
-      where
-        enclose = encloseSep lbrace rbrace comma
-        prettyMono var τ = pretty var <+> text "∷" <+> pretty τ
+prettyMonoEnv :: MonoEnv -> Readable Doc
+prettyMonoEnv m = do
+    vars <- forM (Map.toList . monoVarMap $ m) $ \(var, τ) -> do
+        τ' <- readableTyT τ
+        return (var, τ')
+    return $ enclose . map (uncurry prettyMono) $ vars
+  where
+    enclose = encloseSep lbrace rbrace comma
+    prettyMono var τ = pretty var <+> text "∷" <+> pretty τ
 
 instance SubstUVars MonoEnv (Tv Typed) where
     θ ▷ m = MonoEnv . fmap (θ ▷) . monoVarMap $ m

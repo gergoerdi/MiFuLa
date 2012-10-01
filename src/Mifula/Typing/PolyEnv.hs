@@ -9,6 +9,7 @@ module Mifula.Typing.PolyEnv
        ) where
 
 import Mifula.Syntax
+import Mifula.Syntax.Readable
 import Mifula.Unify.UVar
 import Mifula.Typing.MonoEnv
 import Data.Map (Map)
@@ -32,7 +33,7 @@ instance SubstUVars PolyEnv (Tv Typed) where
 instance Pretty PolyEnv where
     pretty = vcat . map (uncurry var) . Map.toList . unPolyEnv
       where
-        var x tyg = pretty x <+> text "∷" <+> pretty tyg
+        var x tyg = pretty x <+> text "∷" <+> runReadable (prettyTyping tyg)
 
 polyVar :: Var Kinded -> Typing -> PolyEnv
 polyVar x tyg = PolyEnv $ Map.singleton x tyg
