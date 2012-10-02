@@ -98,7 +98,7 @@ withScopedTyVars :: [Tv Parsed] -> ([Tv Scoped] -> SC a) -> SC a
 withScopedTyVars tvs f = do
     -- TODO: check conflicting names
     tvs' <- mapM (fmap TvNamed . freshRef . tvName) tvs
-    withTyVars (Set.fromList tvs') $ f tvs'
+    withBoundTyVars (Set.fromList tvs') $ f tvs'
   where
     tvName (TvNamed ref) = ref
 

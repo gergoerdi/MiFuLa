@@ -55,7 +55,6 @@ class AST (a :: Pass -> *) where
 
 data Tagged :: (Pass -> *) -> Pass -> * where
     T :: AST a => { tag :: Tag a π, unTag :: a π } -> Tagged a π
-
 deriving instance (AST a, Show (Tag a π), Show (a π)) => Show (Tagged a π)
 
 data Ref (π :: Pass) where

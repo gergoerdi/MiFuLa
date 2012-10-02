@@ -7,7 +7,8 @@ module Mifula.Scope.SC
        , freshRef
        , refVar, refCon, refTyCon, refTv
        , freshVar, defVar, defPVar
-       , listenVars, withVars, listenPVars, withTyVars
+       , listenVars, withVars, listenPVars
+       , withBoundTyVars, withTyVars
        , atPosition
        ) where
 
@@ -27,10 +28,12 @@ import Data.Default
 data ScopeError = SEUnresolvedCon (Con Parsed)
                 | SEUnresolvedTyCon (TyCon Parsed)
                 | SEUnresolvedVar (Var Parsed)
+                | SEUnresolvedTyVar (Tv Parsed)
                 | SEPatternConflict (Var Parsed)
                 deriving Show
 
 data R = R{ rVars :: Map (Var Parsed) (Var Scoped)
+          , rTyVars :: Maybe (Map (Tv Parsed) (Tv Scoped))
           , rCons :: Map (Con Parsed) (Con Scoped)
           , rTyCons :: Map (TyCon Parsed) (TyCon Scoped)
           , rPos :: SourcePos
@@ -38,6 +41,7 @@ data R = R{ rVars :: Map (Var Parsed) (Var Scoped)
 
 instance Default R where
     def = R{ rVars = mempty
+           , rTyVars = Nothing
            , rCons = mempty
            , rTyCons = mempty
            , rPos = noPos
@@ -106,8 +110,21 @@ withVars newVars = SC . local addVars . unSC
     newVarMap :: Map (Var Parsed) (Var Scoped)
     newVarMap = Map.fromList . map (unId &&& id) $ Set.toList newVars
 
-withTyVars :: Set (Tv Scoped) -> SC a -> SC a
-withTyVars newTvs = SC . localS addTyVars . unSC
+withBoundTyVars :: Set (Tv Scoped) -> SC a -> SC a
+withBoundTyVars newTvs = SC . local addTyVars . unSC
+  where
+    addTyVars :: R -> R
+    addTyVars r@R{ rTyVars } = r{ rTyVars = rTyVars' }
+      where
+        rTyVars' = Just $ newMap `Map.union` (mempty `fromMaybe` rTyVars)
+
+    newMap :: Map (Tv Parsed) (Tv Scoped)
+    newMap = Map.fromList . map ((TvNamed . unId . unT) &&& id) $ Set.toList newTvs
+
+    unT (TvNamed name) = name
+
+withTyVars :: SC a -> SC a
+withTyVars = SC . localS clearTyVars . unSC
   where
     localS f m = do
         s <- get
@@ -116,13 +133,8 @@ withTyVars newTvs = SC . localS addTyVars . unSC
         put s
         return y
 
-    addTyVars :: S -> S
-    addTyVars s@S{ sTyVars } = s{ sTyVars = newMap `Map.union` sTyVars }
-
-    newMap :: Map (Tv Parsed) (Tv Scoped)
-    newMap = Map.fromList . map ((TvNamed . unId . unT) &&& id) $ Set.toList newTvs
-
-    unT (TvNamed name) = name
+    clearTyVars :: S -> S
+    clearTyVars s = s{ sTyVars = mempty }
 
 listenRefs :: (Var Scoped -> Bool) -> SC a -> SC (a, Set (Var Scoped))
 listenRefs isLocal sc = do
@@ -160,7 +172,7 @@ tellPVar :: Var Scoped -> SC ()
 tellPVar x = SC . tell $ mempty{ wPVars = Set.singleton x }
 
 refAssert sel err x = do
-    mref <- SC $ asks $ Map.lookup x . sel
+    mref <- SC . asks $ Map.lookup x . sel
     case mref of
         Nothing -> do
             scopeError $ err x -- TODO
@@ -182,15 +194,23 @@ refTyCon = refAssert rTyCons SEUnresolvedTyCon
 
 refTv :: Tv Parsed -> SC (Tv Scoped)
 refTv tv@(TvNamed ref) = do
-    mtv <- SC . gets $ Map.lookup tv . sTyVars
-    case mtv of
+    mtyvars <- SC . asks $ rTyVars
+    case mtyvars of
+        Just tyvars -> case Map.lookup tv tyvars of
+            Nothing -> do
+                scopeError $ SEUnresolvedTyVar tv
+                return $ error "unresolved"
+            Just tv' -> return tv'
         Nothing -> do
-            id <- freshRef ref
-            let tv' = TvNamed id
-            SC . modify $ addTv tv'
-            return tv'
-        Just tv' -> do
-            return tv'
+            mtv <- SC . gets $ Map.lookup tv . sTyVars
+            case mtv of
+                Nothing -> do
+                    id <- freshRef ref
+                    let tv' = TvNamed id
+                    SC . modify $ addTv tv'
+                    return tv'
+                Just tv' -> do
+                    return tv'
   where
     addTv :: Tv Scoped -> S -> S
     addTv tv' s@S{ sTyVars } = s{ sTyVars = Map.insert tv tv' sTyVars }
