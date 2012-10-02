@@ -24,6 +24,7 @@ instantiate x = do
     θ <- foldlM generalize mempty $ uvars x
     return $ θ ▷ x
   where
+    generalize :: Subst (Tv Typed) -> Tv Typed -> TC (Subst (Tv Typed))
     generalize θ α =
         contract α <$> freshTy <*> pure θ >>=
         maybe (internalError "fresh variable occurs in type") return
@@ -173,7 +174,7 @@ inferExpr_ (T loc expr) = case expr of
     ELet defs body -> do
         (defs', env) <- inferDefs defs
         (body', τBody :@ mBody) <- withEnv env $ inferExpr body
-        (θ, τ :@ m) <- undefined -- TODO
+        (θ, m, τ) <- unify undefined undefined -- TODO
         return (ELet (θ ▷ defs') (θ ▷ body'), τ :@ m)
 
 inferPat :: Tagged Pat Kinded -> TC (Tagged Pat Typed, Typing)
