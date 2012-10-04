@@ -35,7 +35,13 @@ instance Pretty (Ref π) where
 
 -- We can only pretty-print types that don't contain generated type
 -- variables.
-instance Pretty (Ty Parsed) where
+type family HasFreshTvs (π :: Pass) :: Bool
+type instance HasFreshTvs Parsed = False
+type instance HasFreshTvs Scoped = False
+type instance HasFreshTvs (Kinded dir) = False
+type instance HasFreshTvs Typed = True
+
+instance (HasFreshTvs π ~ False) => Pretty (Ty π) where
     pretty = go 0
       where
         goT prec = go prec . unTag
