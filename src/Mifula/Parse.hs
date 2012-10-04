@@ -64,13 +64,13 @@ loc p = do
 getPos :: P SourcePos
 getPos = getPosition
 
-ty :: P (Tagged Ty Parsed)
-ty = buildExpressionParser table term <?> "type expression"
+ty :: Bool -> P (Tagged Ty Parsed)
+ty needParens = buildExpressionParser table term <?> "type expression"
   where
-    table = [ [Infix tyApp AssocRight]
+    table = [ [Infix tyApp AssocLeft]
             , [Infix tyFun AssocRight]
             ]
-    term = parens ty <|> loc (try tyVar <|> tyCon)
+    term = parens (ty False) <|> loc (try tyVar <|> tyCon)
 
     tyFun = do
         arr
@@ -78,6 +78,7 @@ ty = buildExpressionParser table term <?> "type expression"
         return $ \t u -> T pos $ TyApp (T pos $ TyApp (T pos TyFun) t) u
 
     tyApp = do
+        guard (not needParens)
         -- whiteSpace
         pos <- getPos
         return $ \t u -> T pos $ TyApp t u
@@ -182,7 +183,7 @@ tydef = loc tdData
 conDef :: P (Tagged ConDef Parsed)
 conDef = loc $ do
     name <- conname
-    tys <- many ty
+    tys <- many (ty True)
     return $ ConDef name tys
 
 program :: P [Decl]
