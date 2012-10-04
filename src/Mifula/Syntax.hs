@@ -31,14 +31,15 @@ import Data.Maybe (fromMaybe)
 
 data Pass = Parsed
           | Scoped
-          | Kinded
+          | Kinded InOut
           | Typed
 
 class AST (a :: Pass -> *) where
     type Tag a (π :: Pass)
     type Tag a Parsed = TagParsed a
     type Tag a Scoped = TagScoped a
-    type Tag a Kinded = TagKinded a
+    type Tag a (Kinded In) = TagKinded In a
+    type Tag a (Kinded Out) = TagKinded Out a
     type Tag a Typed = TagTyped a
 
     type TagParsed a
@@ -47,11 +48,12 @@ class AST (a :: Pass -> *) where
     type TagScoped a
     type TagScoped a = Tag a Parsed
 
-    type TagKinded a
-    type TagKinded a = Tag a Scoped
+    type TagKinded (dir :: InOut) a
+    type TagKinded In a = Tag a Scoped
+    type TagKinded Out a = Tag a (Kinded In)
 
     type TagTyped a
-    type TagTyped a = Tag a Kinded
+    type TagTyped a = Tag a (Kinded Out)
 
 data Tagged :: (Pass -> *) -> Pass -> * where
     T :: AST a => { tag :: Tag a π, unTag :: a π } -> Tagged a π
@@ -140,6 +142,14 @@ instance HasUVars (Ty π) (Tv π) where
 instance HasUVars (Tagged Ty π) (Tv π) where
     uvars = uvars . unTag
 
+instance SubstUVars (Tagged Ty (Kinded In)) Kv where
+    θ ▷ (T (mloc, κ) τ) = T (mloc, θ ▷ κ) $ θ ▷ τ
+
+instance SubstUVars (Ty (Kinded In)) Kv where
+    θ ▷ τ = case τ of
+        TyApp t u -> TyApp (θ ▷ t) (θ ▷ u)
+        _ -> τ
+
 instance SubstUVars (Tagged Ty Typed) (Tv Typed) where
     θ ▷ tτ = case unTag tτ of
         TyCon con -> tτ
@@ -154,7 +164,7 @@ type Con = Ref
 type family ScopedPass (π :: Pass) :: Bool
 type instance ScopedPass Parsed = False
 type instance ScopedPass Scoped = True
-type instance ScopedPass Kinded = True
+type instance ScopedPass (Kinded dir) = True
 type instance ScopedPass Typed = True
 
 data Decl = DeclDef (Tagged Def Parsed)
@@ -166,12 +176,26 @@ data Defs π where
     DefsGrouped :: (ScopedPass π ~ True) => [[Tagged Def π]] -> Defs π
 deriving instance (Show (Tag Def π), Show (Tag Expr π), Show (Tag Match π), Show (Tag Pat π)) => Show (Defs π)
 
-data TyDef π = TDAlias (TyCon π) [Ref π] (Tagged Ty π)
+data TyDef π = TDAlias (TyCon π) [Ref π] (Tagged Ty π) -- TODO: tag the type formals?
              | TDData (TyCon π) [Ref π] [Tagged ConDef π]
 deriving instance (Show (Tag Ty π), Show (Tag ConDef π)) => Show (TyDef π)
 
+instance SubstUVars (Tagged TyDef (Kinded In)) Kv where
+    θ ▷ (T (mloc, κ) td) = T (mloc, θ ▷ κ) $ θ ▷ td
+
+instance SubstUVars (TyDef (Kinded In)) Kv where
+    θ ▷ td = case td of
+        TDAlias name tvs τ -> TDAlias name tvs (θ ▷ τ)
+        TDData name tvs cons -> TDData name tvs (θ ▷ cons)
+
 data ConDef π = ConDef (Con π) [Tagged Ty π]
 deriving instance (Show (Tag Ty π)) => Show (ConDef π)
+
+instance SubstUVars (Tagged ConDef (Kinded In)) Kv where
+    θ ▷ (T (loc, τ) con) = T (loc, θ ▷ τ) (θ ▷ con)
+
+instance SubstUVars (ConDef (Kinded In)) Kv where
+    θ ▷ (ConDef name τs) = ConDef name $ θ ▷ τs
 
 instance SubstUVars (Defs Typed) (Tv Typed) where
     θ ▷ (DefsGrouped defss) = DefsGrouped (θ ▷ defss)
@@ -237,21 +261,24 @@ noPos :: SourcePos
 noPos = initialPos ""
 
 instance AST TyDef where
-    type TagKinded TyDef = (Tag TyDef Scoped, Kind Out)
+    type TagKinded In TyDef = (Tag TyDef Scoped, Kind In)
+    type TagKinded Out TyDef = (Tag TyDef Scoped, Kind Out)
 
 instance AST ConDef where
-    type TagTyped ConDef = (Tag ConDef Kinded, Tagged Ty Typed)
+    type TagKinded In ConDef = (Tag ConDef Scoped, Tagged Ty (Kinded In))
+    type TagKinded Out ConDef = (Tag ConDef Scoped, Tagged Ty (Kinded Out))
 
 instance AST Ty where
-    type TagKinded Ty = (Maybe (Tag Ty Scoped), Kind Out)
+    type TagKinded In Ty = (Maybe (Tag Ty Scoped), Kind In)
+    type TagKinded Out Ty = (Maybe (Tag Ty Scoped), Kind Out)
 
 instance AST Def where
-    type TagTyped Def = (Tag Def Kinded, Tagged Ty Typed)
+    type TagTyped Def = (Tag Def (Kinded Out), Tagged Ty Typed)
 
 instance AST Match
 
 instance AST Pat where
-    type TagTyped Pat = (Tag Pat Kinded, Tagged Ty Typed)
+    type TagTyped Pat = (Tag Pat (Kinded Out), Tagged Ty Typed)
 
 instance AST Expr where
-    type TagTyped Expr = (Tag Expr Kinded, Tagged Ty Typed)
+    type TagTyped Expr = (Tag Expr (Kinded Out), Tagged Ty Typed)

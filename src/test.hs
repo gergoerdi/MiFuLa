@@ -58,7 +58,7 @@ main = do
     print $ pretty defsS
     putStrLn "--==================--"
 
-    let conMap :: Map (Con Kinded) (Tagged Ty Typed)
+    let conMap :: Map (Con (Kinded Out)) (Tagged Ty (Kinded Out))
         conMap = runKC $ undefined tydefsS
         defsK = runKC $ kindDefs defsS
 
