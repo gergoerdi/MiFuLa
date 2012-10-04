@@ -4,7 +4,8 @@ import Mifula.Syntax.Pretty ()
 import Mifula.Parse (program)
 import Mifula.Scope (scopeDefs, scopeTyDefT)
 import Mifula.Scope.SC (runSC)
-import Mifula.Kinding (runKC, kindDefs)
+import Mifula.Kinding (kindDefs, kindTyDefs)
+import Mifula.Kinding.KC (runKC)
 import Mifula.Typing (inferDefs)
 import Mifula.Typing.TC (runTC)
 
@@ -59,8 +60,11 @@ main = do
     putStrLn "--==================--"
 
     let conMap :: Map (Con (Kinded Out)) (Tagged Ty (Kinded Out))
-        conMap = runKC $ undefined tydefsS
+        conMap = snd $ runKC $ kindTyDefs tydefsS
         defsK = runKC $ kindDefs defsS
+
+    forM_ (Map.toList conMap) $ \(con, τ) -> do
+        putStrLn $ unwords [refName con, "∷", show . pretty $ τ]
 
     let (defsT, env) = runTC conMap mempty (inferDefs defsK)
     print $ pretty env
