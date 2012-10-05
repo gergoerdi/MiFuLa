@@ -12,6 +12,7 @@ import Mifula.Unify.UEq
 
 import Control.Applicative
 import Control.Monad.RWS
+import Control.Monad.Trans.Either
 import Mifula.Fresh
 import Data.Map (Map)
 import qualified Data.Map as Map
@@ -34,15 +35,14 @@ instance Monoid W where
     mempty = W{ wEqs = mempty }
     (W eqs) `mappend` (W eqs') = W (eqs <> eqs')
 
--- TODO: error handling
-newtype KC a = KC{ unKC :: RWST R [UEq (Kind In)] () SupplyId a }
+newtype KC a = KC{ unKC :: RWST R [UEq (Kind In)] () (EitherT (UnificationError Kv (Kind In)) SupplyId) a }
              deriving (Functor, Applicative, Monad)
 
 instance MonadFresh Kv KC where
-    fresh = KC . lift $ fresh
+    fresh = KC . lift . lift $ fresh
 
-runKC :: KC a -> a
-runKC kc = runSupplyId $ fmap fst $ evalRWST (unKC kc) def ()
+runKC :: KC a -> Either (UnificationError Kv (Kind In)) a
+runKC kc = runSupplyId $ runEitherT $ fmap fst $ evalRWST (unKC kc) def ()
 
 withTyCons :: Map (TyCon Scoped) (Kind In) -> KC a -> KC a
 withTyCons tyCons = KC . local addTyCons . unKC
@@ -80,8 +80,6 @@ internalError s = error $ unwords ["Internal error:", s]
 unified :: KC a -> KC (a, Subst Kv)
 unified m = do
     (x, eqs) <- KC . censor (const mempty) . listen . unKC $ m
-    -- case unifyEqs True eqs of
-    --     Left (eq, err) -> do
-    --         error (show err) -- TODO
-    --     Right θ -> return (x, θ)
-    return (x, mempty)
+    case unifyEqs True eqs of
+        Left (eq, err) -> KC . lift . left $ err
+        Right θ -> return (x, θ)

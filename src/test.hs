@@ -20,6 +20,7 @@ import qualified Data.Map as Map
 import Control.Monad (forM_)
 import Data.Monoid
 import Data.Either (partitionEithers)
+import Control.Applicative
 
 decls :: [Decl]
 decls = parseD prog
@@ -59,9 +60,12 @@ main = do
     print $ pretty defsS
     putStrLn "--==================--"
 
-    let conMap :: Map (Con (Kinded Out)) (Tagged Ty (Kinded Out))
-        conMap = snd $ runKC $ kindTyDefs tydefsS
-        defsK = runKC $ kindDefs defsS
+    -- let conMap :: Map (Con (Kinded Out)) (Tagged Ty (Kinded Out))
+    --     conMap = snd $ runKC $ kindTyDefs tydefsS
+    --     defsK = runKC $ kindDefs defsS
+    let ((tydefsK, conMap), defsK) = case runKC ((,) <$> kindTyDefs tydefsS <*> kindDefs defsS) of
+            Left err -> error $ show err
+            Right x -> x
 
     forM_ (Map.toList conMap) $ \(con, τ) -> do
         putStrLn $ unwords [refName con, "∷", show . pretty $ τ]
