@@ -28,13 +28,17 @@ kindTyDefs :: [Tagged TyDef Scoped] -> KC ([Tagged TyDef (Kinded Out)], Map (Con
 kindTyDefs tds = do
     tycons <- forM tds $ \td -> do
         let name = tdName $ unTag td
-        (name,) <$> ((td,) <$> fresh)
+        α <- KVar <$> fresh
+        return (name, td, α)
 
     let mapping :: Map (TyCon Scoped) (Kind In)
-        mapping = Map.fromList $ map (second (KVar . snd)) tycons
+        mapping = Map.fromList $ map (\(name, _, α) -> (name, α)) tycons
 
     (tds', θ) <- unified $ withTyCons mapping $ do
-        forM tycons $ \(_, (td, α)) -> kindTyDef td
+        forM tycons $ \(_, td, α) -> do
+            td' <- kindTyDef td
+            assert $ kindOf td' :~: α
+            return td'
     let tds'' = map (resolveKVars . (θ ▷)) tds'
 
     let cons :: Map (Con (Kinded Out)) (Tagged Ty (Kinded Out))
@@ -119,7 +123,7 @@ kindTy (T loc τ) = do
     (τ', κ) <- kindTy_ τ
     return $ T (Just loc, κ) τ'
 
-kindOf :: Tagged Ty (Kinded In) -> Kind In
+kindOf :: (Tag a π ~ (b, Kind In)) => Tagged a π -> Kind In
 kindOf (T (_, κ) _) = κ
 
 kindTy_ :: Ty Scoped -> KC (Ty (Kinded In), Kind In)
