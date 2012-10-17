@@ -32,6 +32,7 @@ instance Pretty (Ref π) where
     pretty ref = case ref of
         NameRef s -> text s
         IdRef s _ -> text s
+        PrimRef s _ -> text s
 
 -- We can only pretty-print types that don't contain generated type
 -- variables.

@@ -175,16 +175,31 @@ refAssert sel err x = do
     mref <- SC . asks $ Map.lookup x . sel
     case mref of
         Nothing -> do
-            scopeError $ err x -- TODO
+            scopeError $ err x
             return $ error "unresolved"
         Just ref -> do
             return ref
 
 refVar :: Var Parsed -> SC (Var Scoped)
 refVar x = do
-    ref <- refAssert rVars SEUnresolvedVar x
-    tellVar ref
-    return ref
+    -- ref <- refAssert rVars SEUnresolvedVar x
+    mref <- SC . asks $ Map.lookup x . rVars
+    case mref of
+        Nothing -> do
+            case PrimRef (refName x) <$> prim x of
+                Nothing -> do
+                    scopeError $ SEUnresolvedVar x
+                    return $ error "unresolved"
+                Just ref -> return ref
+        Just ref -> do
+            tellVar ref
+            return ref
+
+prim :: Ref Parsed -> Maybe PrimId
+prim = (Map.lookup `flip` prims) . refName
+  where
+    prims :: Map String PrimId
+    prims = Map.fromList [("plus", PrimPlus)]
 
 refCon :: Con Parsed -> SC (Con Scoped)
 refCon = refAssert rCons SEUnresolvedCon

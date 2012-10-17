@@ -8,7 +8,7 @@
 {-# LANGUAGE GeneralizedNewtypeDeriving, StandaloneDeriving #-}
 module Mifula.Syntax
        ( Pass(..), AST(..), Tagged(..)
-       , Id, Ref(..), Var, Con, TyCon
+       , Id, PrimId(..), Ref(..), Var, Con, TyCon
        , Ty(..), Tv(..)
        , Kv, InOut(..), Kind(..)
        , Expr(..), Lit(..), Pat(..)
@@ -59,9 +59,13 @@ data Tagged :: (Pass -> *) -> Pass -> * where
     T :: AST a => { tag :: Tag a π, unTag :: a π } -> Tagged a π
 deriving instance (AST a, Show (Tag a π), Show (a π)) => Show (Tagged a π)
 
+data PrimId = PrimPlus
+            deriving (Show, Eq, Ord, Enum, Bounded)
+
 data Ref (π :: Pass) where
     NameRef :: (ScopedPass π ~ False) => { refName :: String } -> Ref π
     IdRef :: (ScopedPass π ~ True) => {refName :: String, refID ::  Id } -> Ref π
+    PrimRef :: (ScopedPass π ~ True) => {refName :: String, refPrim :: PrimId } -> Ref π
 deriving instance Show (Ref π)
 
 instance Eq (Ref π) where
@@ -71,6 +75,9 @@ instance Eq (Ref π) where
 instance Ord (Ref π) where
     (NameRef name) `compare` (NameRef name') = name `compare` name'
     (IdRef _ x) `compare` (IdRef _ x') = x `compare` x'
+    (PrimRef _ p) `compare` (PrimRef _ p') = p `compare` p'
+    (IdRef _ _) `compare` (PrimRef _ _) = LT
+    (PrimRef _ _) `compare` (IdRef _ _) = GT
 
 type Kv = Id
 
