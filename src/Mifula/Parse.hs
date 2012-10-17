@@ -128,7 +128,7 @@ expr :: P (Tagged Expr Parsed)
 expr = buildExpressionParser table term <?> "expression"
   where
     table = [[Infix eApp AssocLeft]]
-    term = parens expr <|> loc (eLam <|> try eVar <|> eCon)
+    term = parens expr <|> loc (eLit <|> eLam <|> try eVar <|> eCon)
 
     eVar = EVar <$> varname
     eCon = ECon <$> conname
@@ -136,6 +136,10 @@ expr = buildExpressionParser table term <?> "expression"
         -- whiteSpace
         pos <- getPos -- TODO
         return $ \f x -> T pos $ EApp f x
+
+    eLit = ELit <$> lit
+
+    lit = LInt <$> integer
 
     eLam = do
         lambda

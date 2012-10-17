@@ -97,6 +97,10 @@ instance Pretty (Pat π) where
         PWildcard ->
             text "_"
 
+instance Pretty Lit where
+    pretty lit = case lit of
+        LInt n -> pretty n
+
 instance Pretty (Expr π) where
     pretty = go 0
       where
@@ -113,8 +117,9 @@ instance Pretty (Expr π) where
                 paren lam_prec $ text "λ" <+> pretty pat <+> text "→" <+> pretty body
             EApp f x ->
                 paren app_prec $ goT app_prec f <+> goT (app_prec + 1) x
+            ELit lit -> pretty lit
             ELet defs body ->
-                undefined -- TODO
+                error "TODO: pretty-print ELet"
           where
             app_prec = 10
             lam_prec = 5

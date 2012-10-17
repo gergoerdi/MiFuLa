@@ -11,7 +11,7 @@ module Mifula.Syntax
        , Id, Ref(..), Var, Con, TyCon
        , Ty(..), Tv(..)
        , Kv, InOut(..), Kind(..)
-       , Expr(..), Pat(..)
+       , Expr(..), Lit(..), Pat(..)
        , Match(..), Def(..), Defs(..)
        , TyDef(..), ConDef(..)
        , Decl(..)
@@ -239,8 +239,12 @@ instance SubstUVars (Pat Typed) (Tv Typed) where
 instance SubstUVars (Tagged Pat Typed) (Tv Typed) where
     θ ▷ (T (loc, τ) pat) = T (loc, θ ▷ τ) (θ ▷ pat)
 
+data Lit = LInt Integer
+         deriving Show
+
 data Expr π = EVar (Var π)
             | ECon (Con π)
+            | ELit Lit
             | ELam (Tagged Pat π) (Tagged Expr π)
             | EApp (Tagged Expr π) (Tagged Expr π)
             | ELet (Defs π) (Tagged Expr π)

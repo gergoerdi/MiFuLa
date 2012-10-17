@@ -71,6 +71,7 @@ scopeMatch (Match pats locals body) = do
 
 scopeExpr :: Expr Parsed -> SC (Expr Scoped)
 scopeExpr expr = case expr of
+    ELit lit -> return $ ELit lit
     EVar x -> EVar <$> refVar x
     ECon con -> ECon <$> refCon con
     EApp f x -> EApp <$> scopeExprT f <*> scopeExprT x

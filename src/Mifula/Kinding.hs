@@ -161,6 +161,7 @@ kindExpr :: Expr Scoped -> KC (Expr (Kinded Out))
 kindExpr expr = case expr of
     EVar x -> EVar <$> kindRef x
     ECon con -> ECon <$> kindRef con
+    ELit lit -> return $ ELit lit
     ELam pat body -> ELam <$> liftTag kindPat pat <*> liftTag kindExpr body
     EApp ef ex -> EApp <$> liftTag kindExpr ef <*> liftTag kindExpr ex
     ELet defs body -> ELet <$> kindDefs defs <*> liftTag kindExpr body

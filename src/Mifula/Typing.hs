@@ -159,6 +159,10 @@ inferExpr_ (T loc expr) = case expr of
         let tyg = τ :@ mempty
         tyg' <- instantiate tyg
         return (ECon (ref c), tyg')
+    ELit lit -> do
+        τ <- T (Just loc, KStar) <$> inferLit lit
+        let tyg = τ :@ mempty
+        return (ELit lit, tyg)
     EApp f arg -> do
         (f', τ₁ :@ m₁) <- inferExpr f
         (arg', τ₂ :@ m₂) <- inferExpr arg
@@ -197,3 +201,6 @@ inferPat (T loc pat) = case pat of
     PWildcard -> do
         α <- freshTy
         return (T (loc, α) PWildcard, α :@ mempty)
+
+inferLit :: Lit -> TC (Ty Typed)
+inferLit (LInt _) = undefined
