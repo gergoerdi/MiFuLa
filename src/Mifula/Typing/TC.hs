@@ -59,8 +59,9 @@ tunnelTy (T tag τ) = T tag $ go τ
         TyApp t u -> TyApp (tunnelTy t) (tunnelTy u)
         TyFun -> TyFun
 
-    ref :: Ref (Kinded Out) -> Ref Typed
+    ref :: Ref ns (Kinded Out) -> Ref ns Typed
     ref (IdRef name id) = IdRef name id
+    ref (PrimRef name prim) = PrimRef name prim
 
 lookupCon :: Con (Kinded Out) -> TC (Tagged Ty Typed)
 lookupCon con = do

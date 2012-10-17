@@ -29,8 +29,9 @@ instantiate x = do
         contract α <$> freshTy <*> pure θ >>=
         maybe (internalError "fresh variable occurs in type") return
 
-ref :: Ref (Kinded Out) -> Ref Typed
+ref :: Ref ns (Kinded Out) -> Ref ns Typed
 ref (IdRef name x) = IdRef name x
+ref (PrimRef name prim) = PrimRef name prim
 
 inferDefs :: Defs (Kinded Out) -> TC (Defs Typed, PolyEnv)
 inferDefs (DefsGrouped defss) = do
@@ -203,4 +204,4 @@ inferPat (T loc pat) = case pat of
         return (T (loc, α) PWildcard, α :@ mempty)
 
 inferLit :: Lit -> TC (Ty Typed)
-inferLit (LInt _) = undefined
+inferLit (LInt _) = return $ TyCon $ PrimRef "Int" PrimInt

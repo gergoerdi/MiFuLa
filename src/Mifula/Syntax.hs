@@ -8,7 +8,8 @@
 {-# LANGUAGE GeneralizedNewtypeDeriving, StandaloneDeriving #-}
 module Mifula.Syntax
        ( Pass(..), AST(..), Tagged(..)
-       , Id, PrimId(..), Ref(..), Var, Con, TyCon
+       , Id, PrimId(..), Ref(..), Namespace(..)
+       , Var, Con, TyCon
        , Ty(..), Tv(..)
        , Kv, InOut(..), Kind(..)
        , Expr(..), Lit(..), Pat(..)
@@ -59,20 +60,34 @@ data Tagged :: (Pass -> *) -> Pass -> * where
     T :: AST a => { tag :: Tag a π, unTag :: a π } -> Tagged a π
 deriving instance (AST a, Show (Tag a π), Show (a π)) => Show (Tagged a π)
 
-data PrimId = PrimPlus
-            deriving (Show, Eq, Ord, Enum, Bounded)
+data PrimId :: Namespace -> * where
+    PrimPlus :: PrimId NSVar
+    PrimInt :: PrimId NSTyCon
 
-data Ref (π :: Pass) where
-    NameRef :: (ScopedPass π ~ False) => { refName :: String } -> Ref π
-    IdRef :: (ScopedPass π ~ True) => {refName :: String, refID ::  Id } -> Ref π
-    PrimRef :: (ScopedPass π ~ True) => {refName :: String, refPrim :: PrimId } -> Ref π
-deriving instance Show (Ref π)
+deriving instance Show (PrimId ns)
+deriving instance Eq (PrimId ns)
+deriving instance Ord (PrimId ns)
 
-instance Eq (Ref π) where
+data Namespace = NSVar | NSCon | NSTv | NSTyCon
+               deriving (Eq, Show)
+
+type Var = Ref NSVar
+type Con = Ref NSCon
+type TyCon = Ref NSTyCon
+
+data Ref (ns :: Namespace) (π :: Pass) where
+    NameRef :: (ScopedPass π ~ False) => { refName :: String } -> Ref ns π
+    IdRef :: (ScopedPass π ~ True) => { refName :: String, refID :: Id } -> Ref ns π
+    PrimRef :: (ScopedPass π ~ True) => { refName :: String, refPrim :: PrimId ns } -> Ref ns π
+deriving instance Show (Ref ns π)
+
+instance Eq (Ref ns π) where
     (NameRef name) == (NameRef name') = name == name'
     (IdRef _ x) == (IdRef _ x') = x == x'
+    (PrimRef _ p) == (PrimRef _ p') = p == p'
+    _ == _ = False
 
-instance Ord (Ref π) where
+instance Ord (Ref ns π) where
     (NameRef name) `compare` (NameRef name') = name `compare` name'
     (IdRef _ x) `compare` (IdRef _ x') = x `compare` x'
     (PrimRef _ p) `compare` (PrimRef _ p') = p `compare` p'
@@ -115,13 +130,11 @@ instance SubstUVars (Kind In) Kv where
         KVar α -> KVar α `fromMaybe` resolve α θ
 
 data Tv (π :: Pass) where
-    TvNamed :: Ref π -> Tv π
+    TvNamed :: Ref NSTv π -> Tv π
     TvFresh :: Id -> Tv Typed
 deriving instance Show (Tv π)
 deriving instance Eq (Tv π)
 deriving instance Ord (Tv π)
-
-type TyCon = Ref
 
 data Ty π = TyCon (TyCon π)
           | TyVar (Tv π)
@@ -164,10 +177,6 @@ instance SubstUVars (Tagged Ty Typed) (Tv Typed) where
         TyApp tt tu -> T (tag tτ) $ TyApp (θ ▷ tt) (θ ▷ tu)
         TyFun -> tτ
 
-type Var = Ref
-
-type Con = Ref
-
 type family ScopedPass (π :: Pass) :: Bool
 type instance ScopedPass Parsed = False
 type instance ScopedPass Scoped = True
@@ -183,8 +192,8 @@ data Defs π where
     DefsGrouped :: (ScopedPass π ~ True) => [[Tagged Def π]] -> Defs π
 deriving instance (Show (Tag Def π), Show (Tag Expr π), Show (Tag Match π), Show (Tag Pat π)) => Show (Defs π)
 
-data TyDef π = TDAlias (TyCon π) [Ref π] (Tagged Ty π) -- TODO: tag the type formals?
-             | TDData (TyCon π) [Ref π] [Tagged ConDef π]
+data TyDef π = TDAlias (TyCon π) [Ref NSTv π] (Tagged Ty π) -- TODO: tag the type formals?
+             | TDData (TyCon π) [Ref NSTv π] [Tagged ConDef π]
 deriving instance (Show (Tag Ty π), Show (Tag ConDef π)) => Show (TyDef π)
 
 instance SubstUVars (Tagged TyDef (Kinded In)) Kv where

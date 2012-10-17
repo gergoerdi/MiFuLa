@@ -28,11 +28,8 @@ import qualified Data.Stream as Stream
 instance Pretty (a π) => Pretty (Tagged a π) where
     pretty = pretty . unTag
 
-instance Pretty (Ref π) where
-    pretty ref = case ref of
-        NameRef s -> text s
-        IdRef s _ -> text s
-        PrimRef s _ -> text s
+instance Pretty (Ref ns π) where
+    pretty = text . refName
 
 -- We can only pretty-print types that don't contain generated type
 -- variables.

@@ -26,7 +26,7 @@ import Data.Maybe
 
 data S = S{ sUsed :: Set String
           , sFresh :: Stream String
-          , sMapping :: Map Id (Ref Parsed)
+          , sMapping :: Map Id String
           }
 
 newtype Readable a = Readable{ unReadable :: State S a }
@@ -44,18 +44,18 @@ runReadable (Readable m) = result
         failsafe = fmap (\i -> 't':show i) $ Stream.iterate succ 1
         unused = not . (`Set.member` tvNames)
 
-remember :: Ref Typed -> Readable (Ref Parsed)
+remember :: Ref ns Typed -> Readable (Ref ns Parsed)
 remember ref = do
     Readable $ modify $ \s@S{..} -> s{ sUsed = Set.insert name sUsed }
     return $ NameRef name
   where
     name = refName ref
 
-instance MonadFresh (Ref Parsed) Readable where
+instance MonadFresh String Readable where
     fresh = Readable $ do
         ~(Cons n ns) <- gets sFresh
         modify $ \s -> s{ sFresh = ns }
-        return $ NameRef n
+        return n
 
 prepend :: [a] -> Stream a -> Stream a
 prepend (x:xs) ys = Cons x $ prepend xs ys
@@ -66,7 +66,7 @@ readableTv tv = TvNamed <$> case tv of
     TvNamed ref -> remember ref
     TvFresh id -> do
         lookup <- Readable . gets $ Map.lookup id . sMapping
-        case lookup of
+        fmap NameRef $ case lookup of
             Just name -> return name
             Nothing -> do
                 name <- fresh

@@ -42,13 +42,13 @@ arr = reservedOp "->" <|> reservedOp "→"
 lambda :: P ()
 lambda = reservedOp "\\" <|> reservedOp "λ"
 
-conname :: P (Con Parsed)
+conname :: P (Ref ns Parsed)
 conname = do
     name@(n:_) <- identifier
     guard $ isUpper n
     return $ NameRef name
 
-varname :: P (Var Parsed)
+varname :: P (Ref ns Parsed)
 varname = do
     name@(n:_) <- identifier
     guard $ isLower n

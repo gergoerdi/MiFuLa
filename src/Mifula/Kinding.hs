@@ -154,8 +154,9 @@ kindDef def = case def of
 kindMatch :: Match Scoped -> KC (Match (Kinded Out))
 kindMatch (Match pats locals body) = Match <$> mapM (liftTag kindPat) pats <*> kindDefs locals <*> liftTag kindExpr body
 
-kindRef :: Ref Scoped -> KC (Ref (Kinded dir))
+kindRef :: Ref ns Scoped -> KC (Ref ns (Kinded dir))
 kindRef (IdRef s x) = return $ IdRef s x
+kindRef (PrimRef s p) = return $ PrimRef s p
 
 kindExpr :: Expr Scoped -> KC (Expr (Kinded Out))
 kindExpr expr = case expr of

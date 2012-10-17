@@ -67,10 +67,10 @@ newtype SC a = SC{ unSC :: RWST R W S SupplyId a }
 instance MonadFresh Id SC where
     fresh = SC . lift $ fresh
 
-withId :: Ref Parsed -> Id -> Ref Scoped
+withId :: Ref ns Parsed -> Id -> Ref ns Scoped
 (NameRef s) `withId` x = IdRef s x
 
-unId :: Ref Scoped -> Ref Parsed
+unId :: Ref ns Scoped -> Ref ns Parsed
 unId = NameRef . refName
 
 runSC :: [TyDef Parsed] -> SC a -> Either [(SourcePos, ScopeError)] a
@@ -186,7 +186,7 @@ refVar x = do
     mref <- SC . asks $ Map.lookup x . rVars
     case mref of
         Nothing -> do
-            case PrimRef (refName x) <$> prim x of
+            case PrimRef (refName x) <$> primVar x of
                 Nothing -> do
                     scopeError $ SEUnresolvedVar x
                     return $ error "unresolved"
@@ -195,10 +195,10 @@ refVar x = do
             tellVar ref
             return ref
 
-prim :: Ref Parsed -> Maybe PrimId
-prim = (Map.lookup `flip` prims) . refName
+primVar :: Var Parsed -> Maybe (PrimId NSVar)
+primVar = (Map.lookup `flip` prims) . refName
   where
-    prims :: Map String PrimId
+    prims :: Map String (PrimId NSVar)
     prims = Map.fromList [("plus", PrimPlus)]
 
 refCon :: Con Parsed -> SC (Con Scoped)
@@ -230,7 +230,7 @@ refTv tv@(TvNamed ref) = do
     addTv :: Tv Scoped -> S -> S
     addTv tv' s@S{ sTyVars } = s{ sTyVars = Map.insert tv tv' sTyVars }
 
-freshRef :: Ref Parsed -> SC (Ref Scoped)
+freshRef :: Ref ns Parsed -> SC (Ref ns Scoped)
 freshRef ref = do
     x <- fresh
     return $ ref `withId` x
