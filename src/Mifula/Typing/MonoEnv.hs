@@ -24,6 +24,7 @@ import Mifula.Syntax.Pretty ()
 import Mifula.Syntax.Readable
 import Text.PrettyPrint.Leijen hiding ((<$>), (<>))
 
+infix 1 :@
 data Typing = Tagged Ty Typed :@ MonoEnv
             deriving Show
 

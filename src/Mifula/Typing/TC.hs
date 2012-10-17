@@ -32,8 +32,19 @@ runTC :: Map (Con (Kinded Out)) (Tagged Ty (Kinded Out))
 runTC cons polyEnv tc = runSupplyId $ runReaderT (unTC tc) r
   where
     r = R{ rCons = cons
-         , rPolyEnv = polyEnv
+         , rPolyEnv = polyEnv <> prims
          }
+
+    prims = polyVar (PrimRef "plus" PrimPlus) (int ~> int ~> int :@ mempty)
+      where
+        int = tag KStar $ TyCon $ PrimRef "Int" PrimInt
+        tag :: Kind Out -> Ty Typed -> Tagged Ty Typed
+        tag κ = T (Nothing, κ)
+
+        fun = tag (KStar `KArr` KStar `KArr` KStar) TyFun
+
+        infixr ~>
+        t ~> u = tag KStar $ TyApp (tag (KStar `KArr` KStar) $ TyApp fun t) u
 
 internalError :: String -> TC a
 internalError s = error $ unwords ["Internal error:", s]
