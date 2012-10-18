@@ -2,6 +2,7 @@
 {-# LANGUAGE GADTs #-}
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
 {-# LANGUAGE MultiParamTypeClasses, FlexibleInstances #-}
+{-# LANGUAGE RecordWildCards #-}
 module Mifula.Syntax.Readable
        ( Readable
        , runReadable
@@ -11,8 +12,8 @@ module Mifula.Syntax.Readable
 
 import Mifula.Syntax
 
-import Control.Monad.Tardis
 import Mifula.Fresh
+import Control.Monad.State
 import Data.Stream (Stream(..))
 import qualified Data.Stream as Stream
 import Data.Set (Set)
@@ -20,17 +21,21 @@ import qualified Data.Set as Set
 import Data.Map (Map)
 import qualified Data.Map as Map
 import Data.Monoid
-import Control.Arrow (first, second)
 import Control.Applicative
 import Data.Maybe
 
-newtype Readable a = Readable{ unReadable :: Tardis (Set String) (Stream String, Map Id (Ref Parsed)) a }
+data S = S{ sUsed :: Set String
+          , sFresh :: Stream String
+          , sMapping :: Map Id (Ref Parsed)
+          }
+
+newtype Readable a = Readable{ unReadable :: State S a }
                    deriving (Functor, Applicative, Monad)
 
 runReadable :: Readable a -> a
-runReadable (Readable tardis) = result
+runReadable (Readable m) = result
   where
-    (result, (tvNames, _)) = runTardis tardis (mempty, (niceNames, mempty))
+    (result, ~S{ sUsed = tvNames }) = runState m $ S mempty niceNames mempty
 
     niceNames :: Stream String
     niceNames = Stream.filter unused $ prepend preferred failsafe
@@ -41,16 +46,16 @@ runReadable (Readable tardis) = result
 
 remember :: Ref Typed -> Readable (Ref Parsed)
 remember ref = do
-    Readable $ modifyBackwards $ Set.insert name
+    Readable $ modify $ \s@S{..} -> s{ sUsed = Set.insert name sUsed }
     return $ NameRef name
   where
     name = refName ref
 
 instance MonadFresh (Ref Parsed) Readable where
     fresh = Readable $ do
-        ~(Cons s ss) <- getsPast fst
-        modifyForwards . first $ const ss
-        return $ NameRef s
+        ~(Cons n ns) <- gets sFresh
+        modify $ \s -> s{ sFresh = ns }
+        return $ NameRef n
 
 prepend :: [a] -> Stream a -> Stream a
 prepend (x:xs) ys = Cons x $ prepend xs ys
@@ -60,12 +65,12 @@ readableTv :: Tv Typed -> Readable (Tv Parsed)
 readableTv tv = TvNamed <$> case tv of
     TvNamed ref -> remember ref
     TvFresh id -> do
-        lookup <- Readable . getsPast $ Map.lookup id . snd
+        lookup <- Readable . gets $ Map.lookup id . sMapping
         case lookup of
             Just name -> return name
             Nothing -> do
                 name <- fresh
-                Readable . modifyForwards . second $ Map.insert id name
+                Readable . modify $ \s@S{..} -> s{ sMapping = Map.insert id name sMapping }
                 return name
 
 readableTy :: Ty Typed -> Readable (Ty Parsed)
