@@ -16,7 +16,7 @@ import qualified Data.Map as Map
 
 import Control.Monad.Reader
 
-data R = R{ rCons :: Map (Con (Kinded Out)) (Tagged Ty (Kinded Out))
+data R = R{ rCons :: Map (ConB (Kinded Out)) (Tagged Ty (Kinded Out))
           , rPolyEnv :: PolyEnv
           }
        deriving Show
@@ -27,7 +27,7 @@ newtype TC a = TC{ unTC :: ReaderT R SupplyId a }
 instance MonadFresh (Tv Typed) TC where
     fresh = TvFresh <$> (TC . lift $ fresh)
 
-runTC :: Map (Con (Kinded Out)) (Tagged Ty (Kinded Out))
+runTC :: Map (ConB (Kinded Out)) (Tagged Ty (Kinded Out))
       -> PolyEnv
       -> TC a -> a -- TODO: errors
 runTC cons polyEnv tc = runSupplyId $ runReaderT (unTC tc) r
@@ -48,8 +48,8 @@ withEnv env = TC . local addEnv . unTC
     addEnv r@R{..} = r{ rPolyEnv = env <> rPolyEnv }
 
 lookupVar :: Var (Kinded Out) -> TC (Maybe Typing)
-lookupVar var@(IdRef _ _) = TC . asks $ lookupPolyVar var . rPolyEnv
-lookupVar var@(PrimRef _ p) = return $ Just $ primVarTy p :@ mempty
+lookupVar (BindingRef b) = TC . asks $ lookupPolyVar b . rPolyEnv
+-- lookupVar (PrimRef _ p) = return $ Just $ primVarTy p :@ mempty
 
 tunnelTy :: Tagged Ty (Kinded Out) -> Tagged Ty Typed
 tunnelTy (T tag τ) = T tag $ go τ
@@ -57,15 +57,15 @@ tunnelTy (T tag τ) = T tag $ go τ
     go :: Ty (Kinded Out) -> Ty Typed
     go τ = case τ of
         TyCon con -> TyCon $ ref con
-        TyVar (TvNamed α) -> TyVar . TvNamed $ ref α
+        TyVar (TvNamed (BindId name id)) -> TyVar . TvNamed $ BindId name id
         TyApp t u -> TyApp (tunnelTy t) (tunnelTy u)
         TyFun -> TyFun
 
     ref :: Ref ns (Kinded Out) -> Ref ns Typed
-    ref (IdRef name id) = IdRef name id
-    ref (PrimRef name prim) = PrimRef name prim
+    ref (BindingRef (BindId name id)) = BindingRef $ BindId name id
+    ref (PrimRef prim) = PrimRef prim
 
-lookupCon :: Con (Kinded Out) -> TC (Tagged Ty Typed)
+lookupCon :: ConB (Kinded Out) -> TC (Tagged Ty Typed)
 lookupCon con = do
     mty <- TC . asks $ Map.lookup con . rCons
     maybe fail (return . tunnelTy) mty

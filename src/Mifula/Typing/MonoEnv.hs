@@ -46,7 +46,7 @@ instance HasUVars Typing (Tv Typed) where
 -- should never be `PrimRef`s).
 -- However, this would cause problems with trying to print a
 -- `MonoEnv`, since we need string names there.
-newtype MonoEnv = MonoEnv{ monoVarMap :: Map (Var (Kinded Out)) (Tagged Ty Typed) }
+newtype MonoEnv = MonoEnv{ monoVarMap :: Map (VarB (Kinded Out)) (Tagged Ty Typed) }
                 deriving (Monoid, Show)
 
 prettyMonoEnv :: MonoEnv -> Readable Doc
@@ -65,16 +65,16 @@ instance SubstUVars MonoEnv (Tv Typed) where
 instance HasUVars MonoEnv (Tv Typed) where
     uvars = foldMap uvars . monoVarMap
 
-monoVar :: Var (Kinded Out) -> Tagged Ty Typed -> Typing
+monoVar :: VarB (Kinded Out) -> Tagged Ty Typed -> Typing
 monoVar x τ = τ :@ m
   where
     m = MonoEnv $ Map.singleton x τ
 
-monoVars :: MonoEnv -> Set (Var (Kinded Out))
+monoVars :: MonoEnv -> Set (VarB (Kinded Out))
 monoVars = Map.keysSet . monoVarMap
 
-removeMonoVars :: Set (Var (Kinded Out)) -> MonoEnv -> MonoEnv
+removeMonoVars :: Set (VarB (Kinded Out)) -> MonoEnv -> MonoEnv
 removeMonoVars xs = MonoEnv . (foldr Map.delete `flip` xs) . monoVarMap
 
-lookupMonoVar :: Var (Kinded Out) -> MonoEnv -> Maybe (Tagged Ty Typed)
+lookupMonoVar :: VarB (Kinded Out) -> MonoEnv -> Maybe (Tagged Ty Typed)
 lookupMonoVar x = Map.lookup x . monoVarMap

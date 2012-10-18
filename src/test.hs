@@ -7,7 +7,7 @@ import Mifula.Scope.SC (runSC)
 import Mifula.Kinding (kindDefs, kindTyDefs)
 import Mifula.Kinding.KC (runKC)
 -- import Mifula.Typing (inferDefs)
--- import Mifula.Typing.TC (runTC)
+import Mifula.Typing.TC (runTC)
 
 import qualified Text.ParserCombinators.Parsec.IndentParser as IP
 
