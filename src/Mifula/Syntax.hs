@@ -7,7 +7,8 @@
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE GeneralizedNewtypeDeriving, StandaloneDeriving #-}
 module Mifula.Syntax
-       ( Pass(..), AST(..), Tagged(..)
+       ( Pass(..), ScopedPass
+       , AST(..), Tagged(..)
        , Id, PrimId(..), Binding(..), Namespace(..)
        , Ref(..), Var, Con, TyCon
        , VarB, ConB, TyConB

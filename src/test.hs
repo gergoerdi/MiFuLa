@@ -4,8 +4,8 @@ import Mifula.Syntax.Pretty ()
 import Mifula.Parse (program)
 import Mifula.Scope (scopeDefs, scopeTyDefT)
 import Mifula.Scope.SC (runSC)
--- import Mifula.Kinding (kindDefs, kindTyDefs)
--- import Mifula.Kinding.KC (runKC)
+import Mifula.Kinding (kindDefs, kindTyDefs)
+import Mifula.Kinding.KC (runKC)
 -- import Mifula.Typing (inferDefs)
 -- import Mifula.Typing.TC (runTC)
 
@@ -61,15 +61,15 @@ main = do
     print $ pretty defsS
     putStrLn "--==================--"
 
-    -- -- let conMap :: Map (Con (Kinded Out)) (Tagged Ty (Kinded Out))
-    -- --     conMap = snd $ runKC $ kindTyDefs tydefsS
-    -- --     defsK = runKC $ kindDefs defsS
-    -- let ((tydefsK, conMap), defsK) = case runKC ((,) <$> kindTyDefs tydefsS <*> kindDefs defsS) of
-    --         Left err -> error $ show err
-    --         Right x -> x
+    -- let conMap :: Map (Con (Kinded Out)) (Tagged Ty (Kinded Out))
+    --     conMap = snd $ runKC $ kindTyDefs tydefsS
+    --     defsK = runKC $ kindDefs defsS
+    let ((tydefsK, conMap), defsK) = case runKC ((,) <$> kindTyDefs tydefsS <*> kindDefs defsS) of
+            Left err -> error $ show err
+            Right x -> x
 
-    -- forM_ (Map.toList conMap) $ \(con, τ) -> do
-    --     putStrLn $ unwords [refName con, "∷", show . pretty $ τ]
+    forM_ (Map.toList conMap) $ \(con, τ) -> do
+        putStrLn $ unwords [bindName con, "∷", show . pretty $ τ]
 
     -- let (defsT, env) = runTC conMap mempty (inferDefs defsK)
     -- print $ pretty env

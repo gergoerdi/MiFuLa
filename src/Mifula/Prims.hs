@@ -1,5 +1,8 @@
 {-# LANGUAGE GADTs, DataKinds, KindSignatures #-}
-module Mifula.Prims (Prim, resolvePrim, desolvePrim) where
+module Mifula.Prims
+       ( Prim, resolvePrim, desolvePrim
+       , primTyConKind
+       ) where
 
 import Mifula.Syntax
 
@@ -24,11 +27,11 @@ instance Prim NSCon where
 instance Prim NSTyCon where
     nameBimap = Bimap.fromList [("Int", PrimInt)]
 
-{-
 primTyConKind :: PrimId NSTyCon -> Kind Out
 primTyConKind p = case p of
     PrimInt -> KStar
 
+{-
 -- primTy :: String -> PrimId NSTyCon -> Tagged Ty (Kinded Out)
 -- primTy name p = T (Nothing, κ) $ TyCon $ PrimRef name p
 --   where

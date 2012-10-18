@@ -20,7 +20,7 @@ import qualified Data.Map as Map
 import Data.Default
 import Data.Monoid
 
-data R = R{ rTyCons :: Map Id (Kind In)
+data R = R{ rTyCons :: Map (TyConB Scoped) (Kind In)
           , rTyVars :: Map Id (Kind In)
           }
 
@@ -45,7 +45,7 @@ instance MonadFresh Kv KC where
 runKC :: KC a -> Either (UnificationError Kv (Kind In)) a
 runKC kc = runSupplyId $ runEitherT $ fmap fst $ evalRWST (unKC kc) def ()
 
-withTyCons :: Map Id (Kind In) -> KC a -> KC a
+withTyCons :: Map (TyConB Scoped) (Kind In) -> KC a -> KC a
 withTyCons tyCons = KC . local addTyCons . unKC
   where
     addTyCons :: R -> R
@@ -58,7 +58,7 @@ withTyVars tyVars = KC . local addTyVars . unKC
     addTyVars r@R{ rTyVars } = r{ rTyVars = tyVars <> rTyVars }
 
 lookupTyVar :: Tv Scoped -> KC (Kind In)
-lookupTyVar α@(TvNamed (IdRef _ x))  = do
+lookupTyVar α@(TvNamed (BindId _ x))  = do
     mκ <- KC . asks $ Map.lookup x . rTyVars
     maybe fail return mκ
   where
@@ -70,8 +70,8 @@ demoteKind κ = case κ of
     κ₁ `KArr` κ₂ -> demoteKind κ₁ `KArr` demoteKind κ₂
 
 lookupTyCon :: TyCon Scoped -> KC (Kind In)
-lookupTyCon (PrimRef _ p) = return . demoteKind $ primTyConKind p
-lookupTyCon c@(IdRef _ x) = do
+lookupTyCon (PrimRef p) = return . demoteKind $ primTyConKind p
+lookupTyCon c@(BindingRef x) = do
     mκ <- KC . asks $ Map.lookup x . rTyCons
     maybe fail return mκ
   where

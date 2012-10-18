@@ -24,14 +24,14 @@ liftTag f tx = T pos <$> f (unTag tx)
   where
     pos = tag tx
 
-kindTyDefs :: [Tagged TyDef Scoped] -> KC ([Tagged TyDef (Kinded Out)], Map (Con (Kinded Out)) (Tagged Ty (Kinded Out)))
+kindTyDefs :: [Tagged TyDef Scoped] -> KC ([Tagged TyDef (Kinded Out)], Map (ConB (Kinded Out)) (Tagged Ty (Kinded Out)))
 kindTyDefs tds = do
     tycons <- forM tds $ \td -> do
         let name = tdName $ unTag td
         α <- KVar <$> fresh
         return (name, td, α)
 
-    let mapping :: Map (TyCon Scoped) (Kind In)
+    let mapping :: Map (TyConB Scoped) (Kind In)
         mapping = Map.fromList $ map (\(name, _, α) -> (name, α)) tycons
 
     (tds', θ) <- unified $ withTyCons mapping $ do
@@ -39,9 +39,9 @@ kindTyDefs tds = do
             td' <- kindTyDef td
             assert $ kindOf td' :~: α
             return td'
-    let tds'' = map (resolveKVars . (θ ▷)) tds'
+    tds'' <- mapM (resolveKVars . (θ ▷)) tds'
 
-    let cons :: Map (Con (Kinded Out)) (Tagged Ty (Kinded Out))
+    let cons :: Map (ConB (Kinded Out)) (Tagged Ty (Kinded Out))
         cons = Map.fromList $ concatMap (consOf . unTag) tds''
 
     return (tds'', cons)
@@ -50,28 +50,27 @@ kindTyDefs tds = do
         TDAlias con _ _ -> con
         TDData con _ _ -> con
 
-    consOf :: TyDef (Kinded Out) -> [(Con (Kinded Out), Tagged Ty (Kinded Out))]
+    consOf :: TyDef (Kinded Out) -> [(ConB (Kinded Out), Tagged Ty (Kinded Out))]
     consOf td = case td of
         TDAlias{} -> []
         TDData _ _ cons -> map (\(T (_, τ) (ConDef name _)) -> (name, τ)) cons
 
-resolveKVars :: Tagged TyDef (Kinded In) -> Tagged TyDef (Kinded Out)
-resolveKVars (T (loc, κ) td) = T (loc, fixupKind κ) $ case td of
-    TDAlias name tvs τ -> TDAlias (resolveName name) (map resolveName tvs) (resolveTy τ)
-    TDData name tvs cons -> TDData (resolveName name) (map resolveName tvs) (map resolveCon cons)
+resolveKVars :: Tagged TyDef (Kinded In) -> KC (Tagged TyDef (Kinded Out))
+resolveKVars (T (loc, κ) td) = T (loc, fixupKind κ) <$> case td of
+    TDAlias name tvs τ -> TDAlias <$> kindBind name <*> mapM kindBind tvs <*> resolveTy τ
+    TDData name tvs cons -> TDData <$> kindBind name <*> mapM kindBind tvs <*> mapM resolveCon cons
   where
-    -- TODO: Bwaaaaah! Merge this with kindRef...
-    resolveName (IdRef s x) = IdRef s x
+    resolveTy :: Tagged Ty (Kinded In) -> KC (Tagged Ty (Kinded Out))
+    resolveTy (T (loc, κ) τ) = T (loc, fixupKind κ) <$> case τ of
+        TyCon name -> TyCon <$> kindRef name
+        TyVar (TvNamed α) -> TyVar . TvNamed <$> kindBind α
+        TyApp t u -> TyApp <$> resolveTy t <*> resolveTy u
+        TyFun -> return TyFun
 
-    resolveTy :: Tagged Ty (Kinded In) -> Tagged Ty (Kinded Out)
-    resolveTy (T (loc, κ) τ) = T (loc, fixupKind κ) $ case τ of
-        TyCon name -> TyCon (resolveName name)
-        TyVar (TvNamed α) -> TyVar (TvNamed $ resolveName α)
-        TyApp t u -> resolveTy t `TyApp` resolveTy u
-        TyFun -> TyFun
-
-    resolveCon :: Tagged ConDef (Kinded In) -> Tagged ConDef (Kinded Out)
-    resolveCon (T (loc, τ) (ConDef name τs)) = T (loc, resolveTy τ) $ ConDef (resolveName name) (map resolveTy τs)
+    resolveCon :: Tagged ConDef (Kinded In) -> KC (Tagged ConDef (Kinded Out))
+    resolveCon (T (loc, τ) (ConDef name τs)) = do
+        τ' <- resolveTy τ
+        T (loc, τ') <$> (ConDef <$> kindBind name <*> mapM resolveTy τs)
 
 fixupKind :: Kind In -> Kind Out
 fixupKind κ = case κ of
@@ -83,17 +82,17 @@ kindTyDef (T loc td) = case td of
     TDAlias con tvs τ -> do
         error "TODO"
     TDData name tvs cons -> do
-        name' <- kindRef name
+        name' <- kindBind name
         params <- forM tvs $ \tv -> do
             α <- KVar <$> fresh
-            tv' <- kindRef tv
+            tv' <- kindBind tv
             return (tv', T (Just loc, α) $ TyVar . TvNamed $ tv')
         let (tvs', τs) = unzip params
 
         let κs = map kindOf τs
             κ = foldr KArr KStar κs
-            τ₀ = conTy (T (Just loc, κ) $ TyCon name') τs
-        let mapping = Map.fromList $ zipWith (\tv τ -> (TvNamed tv, kindOf τ)) tvs τs
+            τ₀ = conTy (T (Just loc, κ) $ TyCon . BindingRef $ name') τs
+        let mapping = Map.fromList $ zipWith (\tv τ -> (bindID tv, kindOf τ)) tvs τs
         withTyVars mapping $
           T (loc, κ) <$> TDData name' tvs' <$> mapM (kindCon τ₀) cons
   where
@@ -106,7 +105,7 @@ kindCon τ₀ (T loc (ConDef con formals)) = do
         τ'@(T (_, κ) _) <- kindTy τ
         assert $ κ :~: KStar
         return τ'
-    con' <- kindRef con
+    con' <- kindBind con
     let τ = foldr (~>) τ₀ formals'
     return (T (loc, τ) $ ConDef con' formals')
   where
@@ -139,7 +138,7 @@ kindTy_ τ = case τ of
     TyCon con -> (,) <$> (TyCon <$> kindRef con) <*> lookupTyCon con
 
 kindTv :: Tv Scoped -> KC (Tv (Kinded In))
-kindTv (TvNamed x) = TvNamed <$> kindRef x
+kindTv (TvNamed x) = TvNamed <$> kindBind x
 
 kindDefs :: Defs Scoped -> KC (Defs (Kinded Out))
 kindDefs (DefsGrouped defss) = DefsGrouped <$> mapM (mapM $ liftTag kindDef) defss
@@ -147,16 +146,12 @@ kindDefs (DefsGrouped defss) = DefsGrouped <$> mapM (mapM $ liftTag kindDef) def
 kindDef :: Def Scoped -> KC (Def (Kinded Out))
 kindDef def = case def of
     DefVar var locals body ->
-        DefVar <$> kindRef var <*> kindDefs locals <*> liftTag kindExpr body
+        DefVar <$> kindBind var <*> kindDefs locals <*> liftTag kindExpr body
     DefFun fun matches ->
-        DefFun <$> kindRef fun <*> mapM (liftTag kindMatch) matches
+        DefFun <$> kindBind fun <*> mapM (liftTag kindMatch) matches
 
 kindMatch :: Match Scoped -> KC (Match (Kinded Out))
 kindMatch (Match pats locals body) = Match <$> mapM (liftTag kindPat) pats <*> kindDefs locals <*> liftTag kindExpr body
-
-kindRef :: Ref ns Scoped -> KC (Ref ns (Kinded dir))
-kindRef (IdRef s x) = return $ IdRef s x
-kindRef (PrimRef s p) = return $ PrimRef s p
 
 kindExpr :: Expr Scoped -> KC (Expr (Kinded Out))
 kindExpr expr = case expr of
@@ -169,6 +164,13 @@ kindExpr expr = case expr of
 
 kindPat :: Pat Scoped -> KC (Pat (Kinded Out))
 kindPat pat = case pat of
-    PVar x -> PVar <$> kindRef x
+    PVar x -> PVar <$> kindBind x
     PCon con pats -> PCon <$> kindRef con <*> mapM (liftTag kindPat) pats
     PWildcard -> return PWildcard
+
+kindBind :: (ScopedPass π ~ ScopedPass π') => Binding ns π -> KC (Binding ns π')
+kindBind (BindId s x) = return $ BindId s x
+
+kindRef :: (ScopedPass π ~ ScopedPass π') => Ref ns π -> KC (Ref ns π')
+kindRef (BindingRef b) = BindingRef <$> kindBind b
+kindRef (PrimRef p) = return $ PrimRef p
