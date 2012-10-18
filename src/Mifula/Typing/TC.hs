@@ -6,6 +6,7 @@ module Mifula.Typing.TC where
 
 import Mifula.Fresh
 import Mifula.Syntax
+import Mifula.Prims
 import Mifula.Typing.MonoEnv
 import Mifula.Typing.PolyEnv
 import Control.Applicative
@@ -32,19 +33,8 @@ runTC :: Map (Con (Kinded Out)) (Tagged Ty (Kinded Out))
 runTC cons polyEnv tc = runSupplyId $ runReaderT (unTC tc) r
   where
     r = R{ rCons = cons
-         , rPolyEnv = polyEnv <> prims
+         , rPolyEnv = polyEnv
          }
-
-    prims = polyVar (PrimRef "plus" PrimPlus) (int ~> int ~> int :@ mempty)
-      where
-        int = tag KStar $ TyCon $ PrimRef "Int" PrimInt
-        tag :: Kind Out -> Ty Typed -> Tagged Ty Typed
-        tag κ = T (Nothing, κ)
-
-        fun = tag (KStar `KArr` KStar `KArr` KStar) TyFun
-
-        infixr ~>
-        t ~> u = tag KStar $ TyApp (tag (KStar `KArr` KStar) $ TyApp fun t) u
 
 internalError :: String -> TC a
 internalError s = error $ unwords ["Internal error:", s]
@@ -58,7 +48,8 @@ withEnv env = TC . local addEnv . unTC
     addEnv r@R{..} = r{ rPolyEnv = env <> rPolyEnv }
 
 lookupVar :: Var (Kinded Out) -> TC (Maybe Typing)
-lookupVar var = TC . asks $ lookupPolyVar var . rPolyEnv
+lookupVar var@(IdRef _ _) = TC . asks $ lookupPolyVar var . rPolyEnv
+lookupVar var@(PrimRef _ p) = return $ Just $ primVarTy p :@ mempty
 
 tunnelTy :: Tagged Ty (Kinded Out) -> Tagged Ty Typed
 tunnelTy (T tag τ) = T tag $ go τ

@@ -42,6 +42,10 @@ instance SubstUVars Typing (Tv Typed) where
 instance HasUVars Typing (Tv Typed) where
     uvars (τ :@ m) = uvars τ <> uvars m
 
+-- TODO: the keys in the map should be `Id`s, not `Var`s (since they
+-- should never be `PrimRef`s).
+-- However, this would cause problems with trying to print a
+-- `MonoEnv`, since we need string names there.
 newtype MonoEnv = MonoEnv{ monoVarMap :: Map (Var (Kinded Out)) (Tagged Ty Typed) }
                 deriving (Monoid, Show)
 

@@ -6,6 +6,7 @@
 module Mifula.Kinding.KC where
 
 import Mifula.Syntax
+import Mifula.Prims
 import Mifula.Unify
 import Mifula.Unify.UVar
 import Mifula.Unify.UEq
@@ -63,12 +64,18 @@ lookupTyVar α = do
   where
     fail = internalError $ unwords ["type variable not found:", show α]
 
+demoteKind :: Kind Out -> Kind In
+demoteKind κ = case κ of
+    KStar -> KStar
+    κ₁ `KArr` κ₂ -> demoteKind κ₁ `KArr` demoteKind κ₂
+
 lookupTyCon :: TyCon Scoped -> KC (Kind In)
-lookupTyCon α = do
-    mκ <- KC . asks $ Map.lookup α . rTyCons
+lookupTyCon (PrimRef _ p) = return . demoteKind $ primTyConKind p
+lookupTyCon c@(IdRef _ _) = do
+    mκ <- KC . asks $ Map.lookup c . rTyCons
     maybe fail return mκ
   where
-    fail = internalError $ unwords ["type constructor not found:", show α]
+    fail = internalError $ unwords ["type constructor not found:", show c]
 
 assert :: UEq (Kind In) -> KC ()
 assert = KC . tell . (:[])

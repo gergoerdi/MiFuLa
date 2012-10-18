@@ -13,6 +13,7 @@ module Mifula.Scope.SC
        ) where
 
 import Mifula.Syntax
+import Mifula.Prims
 import Mifula.Fresh
 
 import Control.Error
@@ -186,7 +187,7 @@ refVar x = do
     mref <- SC . asks $ Map.lookup x . rVars
     case mref of
         Nothing -> do
-            case PrimRef (refName x) <$> primVar x of
+            case PrimRef (refName x) <$> primVarRef x of
                 Nothing -> do
                     scopeError $ SEUnresolvedVar x
                     return $ error "unresolved"
@@ -194,12 +195,6 @@ refVar x = do
         Just ref -> do
             tellVar ref
             return ref
-
-primVar :: Var Parsed -> Maybe (PrimId NSVar)
-primVar = (Map.lookup `flip` prims) . refName
-  where
-    prims :: Map String (PrimId NSVar)
-    prims = Map.fromList [("plus", PrimPlus)]
 
 refCon :: Con Parsed -> SC (Con Scoped)
 refCon = refAssert rCons SEUnresolvedCon
