@@ -6,7 +6,7 @@ import Mifula.Scope (scopeDefs, scopeTyDefT)
 import Mifula.Scope.SC (runSC)
 import Mifula.Kinding (kindDefs, kindTyDefs)
 import Mifula.Kinding.KC (runKC)
--- import Mifula.Typing (inferDefs)
+import Mifula.Typing (inferDefs)
 import Mifula.Typing.TC (runTC)
 
 import qualified Text.ParserCombinators.Parsec.IndentParser as IP
@@ -71,5 +71,5 @@ main = do
     forM_ (Map.toList conMap) $ \(con, τ) -> do
         putStrLn $ unwords [bindName con, "∷", show . pretty $ τ]
 
-    -- let (defsT, env) = runTC conMap mempty (inferDefs defsK)
-    -- print $ pretty env
+    let (defsT, env) = runTC conMap mempty (inferDefs defsK)
+    print $ pretty env

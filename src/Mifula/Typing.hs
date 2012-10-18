@@ -9,6 +9,7 @@ import Mifula.Unify.UVar
 import Mifula.Unify.UEq
 import Mifula.Unify
 import Mifula.Syntax
+import Mifula.Prims
 
 import Control.Applicative
 import Mifula.Fresh
@@ -30,8 +31,11 @@ instantiate x = do
         maybe (internalError "fresh variable occurs in type") return
 
 ref :: Ref ns (Kinded Out) -> Ref ns Typed
-ref (IdRef name x) = IdRef name x
-ref (PrimRef name prim) = PrimRef name prim
+ref (BindingRef b) = BindingRef $ bind b
+ref (PrimRef prim) = PrimRef prim
+
+bind :: Binding ns (Kinded Out) -> Binding ns Typed
+bind (BindId name x) = BindId name x
 
 inferDefs :: Defs (Kinded Out) -> TC (Defs Typed, PolyEnv)
 inferDefs (DefsGrouped defss) = do
@@ -56,7 +60,7 @@ inferDefGroup defs = do
         (x, def', tyg@(τ :@ _)) <- inferDef_ def
         return (T (loc, τ) def', polyVar x tyg)
 
-    inferDef_ :: Def (Kinded Out) -> TC (Var (Kinded Out), Def Typed, Typing)
+    inferDef_ :: Def (Kinded Out) -> TC (VarB (Kinded Out), Def Typed, Typing)
     inferDef_ def = case def of
         DefVar x locals body -> do
             -- TODO: locals
@@ -64,13 +68,13 @@ inferDefGroup defs = do
 
             (body', τ :@ m) <- inferExpr body
             let m' = removeMonoVars (Set.singleton x) m
-                def' = DefVar (ref x) locals' body'
+                def' = DefVar (bind x) locals' body'
             return (x, def', τ :@ m')
         DefFun fun matches -> do
             (matches', tygs) <- unzip <$> mapM inferMatch matches
             let (τs, ms) = unzip $ map (\ (τ :@ m) -> (τ, m)) tygs
             (θ, m, τ) <- unify ms τs
-            return (fun, DefFun (ref fun) (θ ▷ matches'), τ :@ m)
+            return (fun, DefFun (bind fun) (θ ▷ matches'), τ :@ m)
 
     inferMatch :: Tagged Match (Kinded Out) -> TC (Tagged Match Typed, Typing)
     inferMatch (T loc (Match pats locals body)) = do
@@ -115,12 +119,12 @@ unify ms τs = do
     varEqs :: [TyEq]
     varEqs = concatMap toEqs . Set.toList $ vars
       where
-        toEqs :: Var (Kinded Out) -> [TyEq]
+        toEqs :: VarB (Kinded Out) -> [TyEq]
         toEqs v = case mapMaybe (lookupMonoVar v) ms of
             [] -> []
             τ:τs -> map (τ :~:) τs
 
-    vars :: Set (Var (Kinded Out))
+    vars :: Set (VarB (Kinded Out))
     vars = mconcat . map monoVars $ ms
 
 unifyPoly :: [PolyEnv] -> TC (TySubst, PolyEnv)
@@ -130,7 +134,7 @@ unifyPoly envs = do
         env' = generalize vars env
     return (θ, θ ▷ env')
   where
-    vars :: Set (Var (Kinded Out))
+    vars :: Set (VarB (Kinded Out))
     vars = mconcat . map polyVars $ envs
 
     ms :: [MonoEnv]
@@ -147,13 +151,15 @@ tyArr loc t u = tag KStar $ TyApp (tag (KStar `KArr` KStar) $ TyApp fun t) u
 inferExpr_ :: Tagged Expr (Kinded Out) -> TC (Expr Typed, Typing)
 inferExpr_ (T loc expr) = case expr of
     EVar x -> do
-        tyg <- do
-            mtyg <- lookupVar x
-            case mtyg of
-                Nothing -> do
-                    α <- freshTy
-                    return $ monoVar x α
-                Just tyg -> instantiate tyg
+        tyg <- case x of
+            PrimRef p -> instantiate $ primVarTy p :@ mempty
+            BindingRef b -> do
+                mtyg <- lookupVar b
+                case mtyg of
+                    Nothing -> do
+                        α <- freshTy
+                        return $ monoVar b α
+                    Just tyg -> instantiate tyg
         return (EVar (ref x), tyg)
     ECon c -> do
         τ <- lookupCon c
@@ -186,7 +192,7 @@ inferPat :: Tagged Pat (Kinded Out) -> TC (Tagged Pat Typed, Typing)
 inferPat (T loc pat) = case pat of
     PVar x -> do
         α <- freshTy
-        return (T (loc, α) $ PVar (ref x), monoVar x α)
+        return (T (loc, α) $ PVar (bind x), monoVar x α)
     PCon con pats -> do
         α <- freshTy
         τ <- instantiate =<< lookupCon con
@@ -204,4 +210,4 @@ inferPat (T loc pat) = case pat of
         return (T (loc, α) PWildcard, α :@ mempty)
 
 inferLit :: Lit -> TC (Ty Typed)
-inferLit (LInt _) = return $ TyCon $ PrimRef "Int" PrimInt
+inferLit (LInt _) = return $ TyCon $ PrimRef PrimInt

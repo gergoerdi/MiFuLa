@@ -47,9 +47,8 @@ withEnv env = TC . local addEnv . unTC
   where
     addEnv r@R{..} = r{ rPolyEnv = env <> rPolyEnv }
 
-lookupVar :: Var (Kinded Out) -> TC (Maybe Typing)
-lookupVar (BindingRef b) = TC . asks $ lookupPolyVar b . rPolyEnv
--- lookupVar (PrimRef _ p) = return $ Just $ primVarTy p :@ mempty
+lookupVar :: VarB (Kinded Out) -> TC (Maybe Typing)
+lookupVar b = TC . asks $ lookupPolyVar b . rPolyEnv
 
 tunnelTy :: Tagged Ty (Kinded Out) -> Tagged Ty Typed
 tunnelTy (T tag τ) = T tag $ go τ
@@ -65,9 +64,10 @@ tunnelTy (T tag τ) = T tag $ go τ
     ref (BindingRef (BindId name id)) = BindingRef $ BindId name id
     ref (PrimRef prim) = PrimRef prim
 
-lookupCon :: ConB (Kinded Out) -> TC (Tagged Ty Typed)
-lookupCon con = do
-    mty <- TC . asks $ Map.lookup con . rCons
-    maybe fail (return . tunnelTy) mty
+lookupCon :: Con (Kinded Out) -> TC (Tagged Ty Typed)
+lookupCon con = case con of
+    BindingRef ref -> do
+        mty <- TC . asks $ Map.lookup ref . rCons
+        maybe fail (return . tunnelTy) mty
   where
     fail = internalError $ unwords ["constructor not found:", show con]

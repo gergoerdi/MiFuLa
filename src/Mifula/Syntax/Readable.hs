@@ -11,6 +11,7 @@ module Mifula.Syntax.Readable
        ) where
 
 import Mifula.Syntax
+import Mifula.Prims
 
 import Mifula.Fresh
 import Control.Monad.State
@@ -76,7 +77,7 @@ readableTv tv = TvNamed <$> case tv of
 readableTy :: Ty Typed -> Readable (Ty Parsed)
 readableTy τ = case τ of
     TyCon con -> return . TyCon . BindingRef . BindName $ case con of
-        -- PrimRef p -> undefined -- TODO
+        PrimRef p -> desolvePrim p
         BindingRef b -> bindName b
     TyVar tv -> TyVar <$> readableTv tv
     TyApp t u -> TyApp <$> readableTyT t <*> readableTyT u

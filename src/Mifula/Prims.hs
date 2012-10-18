@@ -2,6 +2,7 @@
 module Mifula.Prims
        ( Prim, resolvePrim, desolvePrim
        , primTyConKind
+       , primVarTy
        ) where
 
 import Mifula.Syntax
@@ -31,7 +32,6 @@ primTyConKind :: PrimId NSTyCon -> Kind Out
 primTyConKind p = case p of
     PrimInt -> KStar
 
-{-
 -- primTy :: String -> PrimId NSTyCon -> Tagged Ty (Kinded Out)
 -- primTy name p = T (Nothing, κ) $ TyCon $ PrimRef name p
 --   where
@@ -49,11 +49,9 @@ primVarTy p = case p of
       where
         fun = tag (KStar `KArr` KStar `KArr` KStar) TyFun
 
-    primTy :: String -> PrimId NSTyCon -> Tagged Ty Typed
-    primTy name p = T (Nothing, κ) $ TyCon $ PrimRef name p
+    primTy :: PrimId NSTyCon -> Tagged Ty Typed
+    primTy p = T (Nothing, κ) $ TyCon $ PrimRef p
       where
         κ = primTyConKind p
 
-    int = primTy "Int" PrimInt
-
--}
+    int = primTy PrimInt
