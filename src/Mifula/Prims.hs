@@ -1,17 +1,30 @@
-{-# LANGUAGE GADTs, DataKinds #-}
-module Mifula.Prims where
+{-# LANGUAGE GADTs, DataKinds, KindSignatures #-}
+module Mifula.Prims (Prim, resolvePrim, desolvePrim) where
 
 import Mifula.Syntax
 
-import Data.Map (Map)
-import qualified Data.Map as Map
+import Data.Bimap (Bimap, (!>))
+import qualified Data.Bimap as Bimap
 
-primVarRef :: Var Parsed -> Maybe (PrimId NSVar)
-primVarRef = (Map.lookup `flip` prims) . refName
-  where
-    prims :: Map String (PrimId NSVar)
-    prims = Map.fromList [("plus", PrimPlus)]
+class Prim (ns :: Namespace) where
+    nameBimap :: Bimap String (PrimId ns)
 
+resolvePrim :: (Prim ns) => Binding ns Parsed -> Maybe (Ref ns Scoped)
+resolvePrim (BindName s) = fmap PrimRef $ Bimap.lookup s nameBimap
+
+desolvePrim :: (Prim ns) => PrimId ns -> String
+desolvePrim = (nameBimap !>)
+
+instance Prim NSVar where
+    nameBimap = Bimap.fromList [("plus", PrimPlus)]
+
+instance Prim NSCon where
+    nameBimap = Bimap.fromList []
+
+instance Prim NSTyCon where
+    nameBimap = Bimap.fromList [("Int", PrimInt)]
+
+{-
 primTyConKind :: PrimId NSTyCon -> Kind Out
 primTyConKind p = case p of
     PrimInt -> KStar
@@ -40,3 +53,4 @@ primVarTy p = case p of
 
     int = primTy "Int" PrimInt
 
+-}

@@ -4,8 +4,10 @@
 {-# LANGUAGE MultiParamTypeClasses #-}
 module Mifula.Scope.SC
        ( SC, runSC
-       , freshRef
-       , refVar, refCon, refTyCon, refTv
+       , freshBinding
+       , refVar, refCon, refTyCon
+       , refVarB, refConB, refTyConB
+       , refTv
        , freshVar, defVar, defPVar
        , listenVars, withVars, listenPVars
        , withBoundTyVars, withTyVars
@@ -33,10 +35,10 @@ data ScopeError = SEUnresolvedCon (Con Parsed)
                 | SEPatternConflict (Var Parsed)
                 deriving Show
 
-data R = R{ rVars :: Map (Var Parsed) (Var Scoped)
+data R = R{ rVars :: Map (VarB Parsed) (VarB Scoped)
           , rTyVars :: Maybe (Map (Tv Parsed) (Tv Scoped))
-          , rCons :: Map (Con Parsed) (Con Scoped)
-          , rTyCons :: Map (TyCon Parsed) (TyCon Scoped)
+          , rCons :: Map (ConB Parsed) (ConB Scoped)
+          , rTyCons :: Map (TyConB Parsed) (TyConB Scoped)
           , rPos :: SourcePos
           }
 
@@ -48,8 +50,8 @@ instance Default R where
            , rPos = noPos
            }
 
-data W = W{ wRefs :: Set (Var Scoped)
-          , wPVars :: Set (Var Scoped)
+data W = W{ wRefs :: Set (VarB Scoped)
+          , wPVars :: Set (VarB Scoped)
           , wErrors :: [(SourcePos, ScopeError)]
           }
 
@@ -68,11 +70,11 @@ newtype SC a = SC{ unSC :: RWST R W S SupplyId a }
 instance MonadFresh Id SC where
     fresh = SC . lift $ fresh
 
-withId :: Ref ns Parsed -> Id -> Ref ns Scoped
-(NameRef s) `withId` x = IdRef s x
+withId :: Binding ns Parsed -> Id -> Binding ns Scoped
+(BindName s) `withId` x = BindId s x
 
-unId :: Ref ns Scoped -> Ref ns Parsed
-unId = NameRef . refName
+unId :: Binding ns Scoped -> Binding ns Parsed
+unId (BindId s _) = BindName s
 
 runSC :: [TyDef Parsed] -> SC a -> Either [(SourcePos, ScopeError)] a
 runSC tydefs sc = case runSupplyId $ evalRWST (unSC sc') def def of
@@ -80,12 +82,12 @@ runSC tydefs sc = case runSupplyId $ evalRWST (unSC sc') def def of
         [] -> Right x
         errs -> Left errs
   where
-    tycons :: Set (TyCon Parsed)
+    tycons :: Set (TyConB Parsed)
     tycons = Set.fromList $ map tcName tydefs
     tcName (TDAlias name _ _) = name
     tcName (TDData name _ _) = name
 
-    cons :: Set (Con Parsed)
+    cons :: Set (ConB Parsed)
     cons = Set.fromList $ concatMap conName tydefs
     conName (TDAlias _ _ _) = []
     conName (TDData _ _ cons) = map ((\(ConDef con _) -> con) . unTag) cons
@@ -95,20 +97,21 @@ runSC tydefs sc = case runSupplyId $ evalRWST (unSC sc') def def of
         cons' <- genIds cons
         SC . local (\r -> r{ rCons = cons', rTyCons = tycons' }) . unSC $ sc
 
-    genIds refs = fmap Map.fromAscList $ forM (Set.toAscList refs) $ \ref -> do
+    genIds :: Set (Binding ns Parsed) -> SC (Map (Binding ns Parsed) (Binding ns Scoped))
+    genIds refs = fmap Map.fromAscList $ forM (Set.toAscList refs) $ \bind -> do
         x <- fresh
-        return (ref, ref `withId` x)
+        return (bind, bind `withId` x)
 
-listenVars :: Set (Var Scoped) -> SC a -> SC (a, Set (Var Scoped))
+listenVars :: Set (VarB Scoped) -> SC a -> SC (a, Set (VarB Scoped))
 listenVars newVars = listenRefs (`Set.member` newVars) . withVars newVars
 
-withVars :: Set (Var Scoped) -> SC a -> SC a
+withVars :: Set (VarB Scoped) -> SC a -> SC a
 withVars newVars = SC . local addVars . unSC
   where
     addVars :: R -> R
     addVars r@R{ rVars } = r{ rVars = newVarMap `Map.union` rVars }
 
-    newVarMap :: Map (Var Parsed) (Var Scoped)
+    newVarMap :: Map (VarB Parsed) (VarB Scoped)
     newVarMap = Map.fromList . map (unId &&& id) $ Set.toList newVars
 
 withBoundTyVars :: Set (Tv Scoped) -> SC a -> SC a
@@ -137,7 +140,7 @@ withTyVars = SC . localS clearTyVars . unSC
     clearTyVars :: S -> S
     clearTyVars s = s{ sTyVars = mempty }
 
-listenRefs :: (Var Scoped -> Bool) -> SC a -> SC (a, Set (Var Scoped))
+listenRefs :: (Binding NSVar Scoped -> Bool) -> SC a -> SC (a, Set (Binding NSVar Scoped))
 listenRefs isLocal sc = do
     (x, w) <- SC . censor noRefs . listen . unSC $ sc
     let vars = wRefs w
@@ -148,7 +151,7 @@ listenRefs isLocal sc = do
     noRefs :: W -> W
     noRefs w = w{ wRefs = mempty }
 
-listenPVars :: SC a -> SC (a, Set (Var Scoped))
+listenPVars :: SC a -> SC (a, Set (Binding NSVar Scoped))
 listenPVars sc = do
     (x, w) <- SC . censor noPVars . listen . unSC $ sc
     return (x, wPVars w)
@@ -167,40 +170,53 @@ scopeError err = do
     SC . tell $ mempty{ wErrors = [(pos, err)]} -- TODO: error locations
 
 tellVar :: Var Scoped -> SC ()
-tellVar x = SC . tell $ mempty{ wRefs = Set.singleton x }
+tellVar ref = case ref of
+    BindingRef x -> SC . tell $ mempty{ wRefs = Set.singleton x }
+    PrimRef _ -> return ()
 
-tellPVar :: Var Scoped -> SC ()
+tellPVar :: VarB Scoped -> SC ()
 tellPVar x = SC . tell $ mempty{ wPVars = Set.singleton x }
 
-refAssert sel err x = do
-    mref <- SC . asks $ Map.lookup x . sel
-    case mref of
+refAssert sel err x@(BindingRef name) = do
+    mbind <- SC . asks $ Map.lookup name . sel
+    case mbind of
         Nothing -> do
-            scopeError $ err x
-            return $ error "unresolved"
-        Just ref -> do
-            return ref
-
-refVar :: Var Parsed -> SC (Var Scoped)
-refVar x = do
-    -- ref <- refAssert rVars SEUnresolvedVar x
-    mref <- SC . asks $ Map.lookup x . rVars
-    case mref of
-        Nothing -> do
-            case PrimRef (refName x) <$> primVarRef x of
+            case resolvePrim name of
                 Nothing -> do
-                    scopeError $ SEUnresolvedVar x
+                    scopeError $ err x
                     return $ error "unresolved"
                 Just ref -> return ref
-        Just ref -> do
-            tellVar ref
-            return ref
+        Just bind -> return $ BindingRef bind
+
+refPredefined sel x = do
+    mbind <- SC . asks $ Map.lookup x . sel
+    case mbind of
+        Nothing -> internalError $ unwords ["Pre-defined reference not found:", show x]
+        Just bind -> return bind
+
+refVarB :: VarB Parsed -> SC (VarB Scoped)
+refVarB = refPredefined rVars
+
+refVar :: Var Parsed -> SC (Var Scoped)
+refVar x@(BindingRef name) = do
+    ref <- refAssert rVars SEUnresolvedVar x
+    tellVar ref
+    return ref
 
 refCon :: Con Parsed -> SC (Con Scoped)
 refCon = refAssert rCons SEUnresolvedCon
 
+internalError :: String -> SC a
+internalError s = error $ unwords ["Internal error:", s]
+
+refConB :: ConB Parsed -> SC (ConB Scoped)
+refConB = refPredefined rCons
+
 refTyCon :: TyCon Parsed -> SC (TyCon Scoped)
 refTyCon = refAssert rTyCons SEUnresolvedTyCon
+
+refTyConB :: TyConB Parsed -> SC (TyConB Scoped)
+refTyConB = refPredefined rTyCons
 
 refTv :: Tv Parsed -> SC (Tv Scoped)
 refTv tv@(TvNamed ref) = do
@@ -215,7 +231,7 @@ refTv tv@(TvNamed ref) = do
             mtv <- SC . gets $ Map.lookup tv . sTyVars
             case mtv of
                 Nothing -> do
-                    id <- freshRef ref
+                    id <- freshBinding ref
                     let tv' = TvNamed id
                     SC . modify $ addTv tv'
                     return tv'
@@ -225,20 +241,20 @@ refTv tv@(TvNamed ref) = do
     addTv :: Tv Scoped -> S -> S
     addTv tv' s@S{ sTyVars } = s{ sTyVars = Map.insert tv tv' sTyVars }
 
-freshRef :: Ref ns Parsed -> SC (Ref ns Scoped)
-freshRef ref = do
+freshBinding :: Binding ns Parsed -> SC (Binding ns Scoped)
+freshBinding ref = do
     x <- fresh
     return $ ref `withId` x
 
-freshVar :: Var Parsed -> SC (Var Scoped)
-freshVar = freshRef
+freshVar :: VarB Parsed -> SC (VarB Scoped)
+freshVar = freshBinding
 
-defVar :: Var Parsed -> SC (Var Scoped)
+defVar :: VarB Parsed -> SC (VarB Scoped)
 defVar x = SC $ asks $ force . Map.lookup x . rVars
   where
     force = fromMaybe (error "Internal error: unresolved def")
 
-defPVar :: Var Parsed -> SC (Var Scoped)
+defPVar :: VarB Parsed -> SC (VarB Scoped)
 defPVar var = do
     ref <- freshVar var
     tellPVar ref

@@ -20,8 +20,8 @@ import qualified Data.Map as Map
 import Data.Default
 import Data.Monoid
 
-data R = R{ rTyCons :: Map (TyCon Scoped) (Kind In)
-          , rTyVars :: Map (Tv Scoped) (Kind In)
+data R = R{ rTyCons :: Map Id (Kind In)
+          , rTyVars :: Map Id (Kind In)
           }
 
 instance Default R where
@@ -45,21 +45,21 @@ instance MonadFresh Kv KC where
 runKC :: KC a -> Either (UnificationError Kv (Kind In)) a
 runKC kc = runSupplyId $ runEitherT $ fmap fst $ evalRWST (unKC kc) def ()
 
-withTyCons :: Map (TyCon Scoped) (Kind In) -> KC a -> KC a
+withTyCons :: Map Id (Kind In) -> KC a -> KC a
 withTyCons tyCons = KC . local addTyCons . unKC
   where
     addTyCons :: R -> R
     addTyCons r@R{ rTyCons } = r{ rTyCons = tyCons <> rTyCons }
 
-withTyVars :: Map (Tv Scoped) (Kind In) -> KC a -> KC a
+withTyVars :: Map Id (Kind In) -> KC a -> KC a
 withTyVars tyVars = KC . local addTyVars . unKC
   where
     addTyVars :: R -> R
     addTyVars r@R{ rTyVars } = r{ rTyVars = tyVars <> rTyVars }
 
 lookupTyVar :: Tv Scoped -> KC (Kind In)
-lookupTyVar α = do
-    mκ <- KC . asks $ Map.lookup α . rTyVars
+lookupTyVar α@(TvNamed (IdRef _ x))  = do
+    mκ <- KC . asks $ Map.lookup x . rTyVars
     maybe fail return mκ
   where
     fail = internalError $ unwords ["type variable not found:", show α]
@@ -71,8 +71,8 @@ demoteKind κ = case κ of
 
 lookupTyCon :: TyCon Scoped -> KC (Kind In)
 lookupTyCon (PrimRef _ p) = return . demoteKind $ primTyConKind p
-lookupTyCon c@(IdRef _ _) = do
-    mκ <- KC . asks $ Map.lookup c . rTyCons
+lookupTyCon c@(IdRef _ x) = do
+    mκ <- KC . asks $ Map.lookup x . rTyCons
     maybe fail return mκ
   where
     fail = internalError $ unwords ["type constructor not found:", show c]

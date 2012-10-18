@@ -8,8 +8,9 @@
 {-# LANGUAGE GeneralizedNewtypeDeriving, StandaloneDeriving #-}
 module Mifula.Syntax
        ( Pass(..), AST(..), Tagged(..)
-       , Id, PrimId(..), Ref(..), Namespace(..)
-       , Var, Con, TyCon
+       , Id, PrimId(..), Binding(..), Namespace(..)
+       , Ref(..), Var, Con, TyCon
+       , VarB, ConB, TyConB
        , Ty(..), Tv(..)
        , Kv, InOut(..), Kind(..)
        , Expr(..), Lit(..), Pat(..)
@@ -75,24 +76,28 @@ type Var = Ref NSVar
 type Con = Ref NSCon
 type TyCon = Ref NSTyCon
 
+type VarB = Binding NSVar
+type ConB = Binding NSCon
+type TyConB = Binding NSTyCon
+
+data Binding (ns :: Namespace) (π :: Pass) where
+    BindName :: (ScopedPass π ~ False) => { bindName :: String } -> Binding ns π
+    BindId :: (ScopedPass π ~ True) => { bindName :: String, bindID :: Id } -> Binding ns π
+deriving instance Show (Binding ns π)
+
+instance Eq (Binding ns π) where
+    (BindName name) == (BindName name') = name == name'
+    (BindId _ x) == (BindId _ x') = x == x'
+
+instance Ord (Binding ns π) where
+    (BindName name) `compare` (BindName name') = name `compare` name'
+    (BindId _ x) `compare` (BindId _ x') = x `compare` x'
+
 data Ref (ns :: Namespace) (π :: Pass) where
-    NameRef :: (ScopedPass π ~ False) => { refName :: String } -> Ref ns π
-    IdRef :: (ScopedPass π ~ True) => { refName :: String, refID :: Id } -> Ref ns π
-    PrimRef :: (ScopedPass π ~ True) => { refName :: String, refPrim :: PrimId ns } -> Ref ns π
+    BindingRef :: Binding ns π -> Ref ns π
+    PrimRef :: (ScopedPass π ~ True) => PrimId ns -> Ref ns π
 deriving instance Show (Ref ns π)
-
-instance Eq (Ref ns π) where
-    (NameRef name) == (NameRef name') = name == name'
-    (IdRef _ x) == (IdRef _ x') = x == x'
-    (PrimRef _ p) == (PrimRef _ p') = p == p'
-    _ == _ = False
-
-instance Ord (Ref ns π) where
-    (NameRef name) `compare` (NameRef name') = name `compare` name'
-    (IdRef _ x) `compare` (IdRef _ x') = x `compare` x'
-    (PrimRef _ p) `compare` (PrimRef _ p') = p `compare` p'
-    (IdRef _ _) `compare` (PrimRef _ _) = LT
-    (PrimRef _ _) `compare` (IdRef _ _) = GT
+deriving instance Eq (Ref ns π)
 
 type Kv = Id
 
@@ -130,7 +135,7 @@ instance SubstUVars (Kind In) Kv where
         KVar α -> KVar α `fromMaybe` resolve α θ
 
 data Tv (π :: Pass) where
-    TvNamed :: Ref NSTv π -> Tv π
+    TvNamed :: Binding NSTv π -> Tv π
     TvFresh :: Id -> Tv Typed
 deriving instance Show (Tv π)
 deriving instance Eq (Tv π)
@@ -192,8 +197,8 @@ data Defs π where
     DefsGrouped :: (ScopedPass π ~ True) => [[Tagged Def π]] -> Defs π
 deriving instance (Show (Tag Def π), Show (Tag Expr π), Show (Tag Match π), Show (Tag Pat π)) => Show (Defs π)
 
-data TyDef π = TDAlias (TyCon π) [Ref NSTv π] (Tagged Ty π) -- TODO: tag the type formals?
-             | TDData (TyCon π) [Ref NSTv π] [Tagged ConDef π]
+data TyDef π = TDAlias (TyConB π) [Binding NSTv π] (Tagged Ty π) -- TODO: tag the type formals?
+             | TDData (TyConB π) [Binding NSTv π] [Tagged ConDef π]
 deriving instance (Show (Tag Ty π), Show (Tag ConDef π)) => Show (TyDef π)
 
 instance SubstUVars (Tagged TyDef (Kinded In)) Kv where
@@ -204,7 +209,7 @@ instance SubstUVars (TyDef (Kinded In)) Kv where
         TDAlias name tvs τ -> TDAlias name tvs (θ ▷ τ)
         TDData name tvs cons -> TDData name tvs (θ ▷ cons)
 
-data ConDef π = ConDef (Con π) [Tagged Ty π]
+data ConDef π = ConDef (ConB π) [Tagged Ty π]
 deriving instance (Show (Tag Ty π)) => Show (ConDef π)
 
 instance SubstUVars (Tagged ConDef (Kinded In)) Kv where
@@ -216,8 +221,8 @@ instance SubstUVars (ConDef (Kinded In)) Kv where
 instance SubstUVars (Defs Typed) (Tv Typed) where
     θ ▷ (DefsGrouped defss) = DefsGrouped (θ ▷ defss)
 
-data Def π = DefVar (Var π) (Defs π) (Tagged Expr π)
-           | DefFun (Var π) [Tagged Match π]
+data Def π = DefVar (VarB π) (Defs π) (Tagged Expr π)
+           | DefFun (VarB π) [Tagged Match π]
 deriving instance (Show (Defs π), Show (Tag Def π), Show (Tag Expr π), Show (Tag Pat π), Show (Tag Match π)) => Show (Def π)
 
 instance SubstUVars (Def Typed) (Tv Typed) where
@@ -228,7 +233,7 @@ instance SubstUVars (Def Typed) (Tv Typed) where
 instance SubstUVars (Tagged Def Typed) (Tv Typed) where
     θ ▷ (T (loc, τ) def) = T (loc, θ ▷ τ) $ θ ▷ def
 
-defName :: Def π -> Var π
+defName :: Def π -> VarB π
 defName (DefVar x _ _) = x
 defName (DefFun fun _) = fun
 
@@ -241,7 +246,7 @@ instance SubstUVars (Match Typed) (Tv Typed) where
 instance SubstUVars (Tagged Match Typed) (Tv Typed) where
     θ ▷ (T loc def) = T loc $ θ ▷ def
 
-data Pat π = PVar (Var π)
+data Pat π = PVar (VarB π)
            | PCon (Con π) [Tagged Pat π]
            | PWildcard
 deriving instance Show (Tag Pat π) => Show (Pat π)

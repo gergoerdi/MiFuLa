@@ -15,7 +15,7 @@ import qualified Data.Set as Set
 scopeDefs :: Defs Parsed -> SC (Defs Scoped)
 scopeDefs = fmap fst . scopeDefs'
 
-scopeDefs' :: Defs Parsed -> SC (Defs Scoped, Set (Var Scoped))
+scopeDefs' :: Defs Parsed -> SC (Defs Scoped, Set (VarB Scoped))
 scopeDefs' (DefsUngrouped defs) = do
     -- TODO: check conflicting names
     defsWithNames <- forM defs $ \def -> do
@@ -45,16 +45,16 @@ scopeTyDef :: TyDef Parsed -> SC (TyDef Scoped)
 scopeTyDef tydef = case tydef of
     TDAlias name tvs τ ->
         withScopedTyVars (map TvNamed tvs) $ \tvs' ->
-          TDAlias <$> refTyCon name <*> pure (map tvName tvs') <*> liftTag scopeTy τ
+          TDAlias <$> refTyConB name <*> pure (map tvName tvs') <*> liftTag scopeTy τ
     TDData name tvs cons -> do
         withScopedTyVars (map TvNamed tvs) $ \tvs' ->
-          TDData <$> refTyCon name <*> pure (map tvName tvs') <*> mapM (liftTag scopeConDef) cons
+          TDData <$> refTyConB name <*> pure (map tvName tvs') <*> mapM (liftTag scopeConDef) cons
   where
     tvName (TvNamed ref) = ref
 
 scopeConDef :: ConDef Parsed -> SC (ConDef Scoped)
 scopeConDef con = case con of
-    ConDef name τ -> ConDef <$> refCon name <*> mapM (liftTag scopeTy) τ
+    ConDef name τ -> ConDef <$> refConB name <*> mapM (liftTag scopeTy) τ
 
 scopeTy :: Ty Parsed -> SC (Ty Scoped)
 scopeTy τ = case τ of
@@ -98,7 +98,7 @@ withPats pats f = do
 withScopedTyVars :: [Tv Parsed] -> ([Tv Scoped] -> SC a) -> SC a
 withScopedTyVars tvs f = do
     -- TODO: check conflicting names
-    tvs' <- mapM (fmap TvNamed . freshRef . tvName) tvs
+    tvs' <- mapM (fmap TvNamed . freshBinding . tvName) tvs
     withBoundTyVars (Set.fromList tvs') $ f tvs'
   where
     tvName (TvNamed ref) = ref

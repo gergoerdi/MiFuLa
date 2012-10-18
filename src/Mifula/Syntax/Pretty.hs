@@ -9,6 +9,7 @@
 module Mifula.Syntax.Pretty () where
 
 import Mifula.Syntax
+import Mifula.Prims
 import Mifula.Syntax.Readable
 
 import Text.PrettyPrint.Leijen hiding ((<$>))
@@ -28,8 +29,13 @@ import qualified Data.Stream as Stream
 instance Pretty (a π) => Pretty (Tagged a π) where
     pretty = pretty . unTag
 
-instance Pretty (Ref ns π) where
-    pretty = text . refName
+instance Pretty (Binding ns π) where
+    pretty = text . bindName
+
+instance (Prim ns) => Pretty (Ref ns π) where
+    pretty ref = case ref of
+        PrimRef p -> text $ desolvePrim p
+        BindingRef b -> pretty b
 
 -- We can only pretty-print types that don't contain generated type
 -- variables.

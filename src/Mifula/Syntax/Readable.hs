@@ -44,12 +44,12 @@ runReadable (Readable m) = result
         failsafe = fmap (\i -> 't':show i) $ Stream.iterate succ 1
         unused = not . (`Set.member` tvNames)
 
-remember :: Ref ns Typed -> Readable (Ref ns Parsed)
-remember ref = do
+remember :: Binding ns Typed -> Readable (Binding ns Parsed)
+remember bind = do
     Readable $ modify $ \s@S{..} -> s{ sUsed = Set.insert name sUsed }
-    return $ NameRef name
+    return $ BindName name
   where
-    name = refName ref
+    name = bindName bind
 
 instance MonadFresh String Readable where
     fresh = Readable $ do
@@ -66,7 +66,7 @@ readableTv tv = TvNamed <$> case tv of
     TvNamed ref -> remember ref
     TvFresh id -> do
         lookup <- Readable . gets $ Map.lookup id . sMapping
-        fmap NameRef $ case lookup of
+        fmap BindName $ case lookup of
             Just name -> return name
             Nothing -> do
                 name <- fresh
@@ -75,7 +75,9 @@ readableTv tv = TvNamed <$> case tv of
 
 readableTy :: Ty Typed -> Readable (Ty Parsed)
 readableTy τ = case τ of
-    TyCon con -> return $ TyCon $ NameRef . refName $ con
+    TyCon con -> return . TyCon . BindingRef . BindName $ case con of
+        -- PrimRef p -> undefined -- TODO
+        BindingRef b -> bindName b
     TyVar tv -> TyVar <$> readableTv tv
     TyApp t u -> TyApp <$> readableTyT t <*> readableTyT u
     TyFun -> return TyFun

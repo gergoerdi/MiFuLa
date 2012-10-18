@@ -42,20 +42,31 @@ arr = reservedOp "->" <|> reservedOp "→"
 lambda :: P ()
 lambda = reservedOp "\\" <|> reservedOp "λ"
 
-conname :: P (Ref ns Parsed)
+conname :: P (Binding ns Parsed)
 conname = do
     name@(n:_) <- identifier
     guard $ isUpper n
-    return $ NameRef name
+    return $ BindName name
 
-varname :: P (Ref ns Parsed)
-varname = do
+conref = BindingRef <$> conname
+
+varOrTv :: P (Binding ns Parsed)
+varOrTv = do
     name@(n:_) <- identifier
     guard $ isLower n
-    return $ NameRef name
+    return $ BindName name
+
+tvname :: P (Binding NSTv Parsed)
+tvname = varOrTv
+
+varname :: P (VarB Parsed)
+varname = varOrTv
+
+varref :: P (Var Parsed)
+varref = BindingRef <$> varname
 
 tv :: P (Tv Parsed)
-tv = TvNamed <$> varname
+tv = TvNamed <$> tvname
 
 loc p = do
     pos <- getPos
@@ -83,7 +94,7 @@ ty needParens = buildExpressionParser table term <?> "type expression"
         pos <- getPos
         return $ \t u -> T pos $ TyApp t u
     tyVar = TyVar <$> tv
-    tyCon = TyCon <$> conname
+    tyCon = TyCon <$> conref
 
 pat :: Bool -> P (Tagged Pat Parsed)
 pat needParens = pCon' <|> try pWildcard <|> pVar <|> parens (pat False)
@@ -93,12 +104,12 @@ pat needParens = pCon' <|> try pWildcard <|> pVar <|> parens (pat False)
     pCon' = if needParens then try pCon0 <|> parens pCon else pCon
 
     pCon = loc $ do
-        con <- conname
+        con <- conref
         pats <- many (pat True)
         return $ PCon con pats
 
     pCon0 = loc $ do
-        con <- conname
+        con <- conref
         return $ PCon con []
 
     pWildcard = loc $ do
@@ -114,7 +125,7 @@ locals = do
   where
     noLocals = DefsUngrouped []
 
-match :: Var Parsed -> P (Tagged Match Parsed)
+match :: VarB Parsed -> P (Tagged Match Parsed)
 match f = try $ loc $ do
     f' <- varname
     guard $ f' == f
@@ -130,8 +141,8 @@ expr = buildExpressionParser table term <?> "expression"
     table = [[Infix eApp AssocLeft]]
     term = parens expr <|> loc (eLit <|> eLam <|> try eVar <|> eCon)
 
-    eVar = EVar <$> varname
-    eCon = ECon <$> conname
+    eVar = EVar <$> varref
+    eCon = ECon <$> conref
     eApp = do
         -- whiteSpace
         pos <- getPos -- TODO
@@ -179,7 +190,7 @@ tydef = loc tdData
     tdData = do
         reserved "data"
         name <- conname
-        formals <- many varname
+        formals <- many tvname
         reservedOp "="
         cons <- IP.lineFold $ conDef `sepBy1` reservedOp "|"
         return $ TDData name formals cons
