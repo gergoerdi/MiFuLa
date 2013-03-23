@@ -81,8 +81,10 @@ monoVar x τ = τ :@ m
 monoVars :: MonoEnv -> Set (VarB (Kinded Out))
 monoVars = Map.keysSet . monoVarMap
 
-removeMonoVars :: Set (VarB (Kinded Out)) -> MonoEnv -> MonoEnv
-removeMonoVars xs (MonoEnv vars cs) = MonoEnv (foldr Map.delete vars xs) cs
+removeMonoVars :: (MonadConstraint m) => Set (VarB (Kinded Out)) -> MonoEnv -> m MonoEnv
+removeMonoVars xs (MonoEnv vars cs) = do
+    let vars' = foldr Map.delete vars xs
+    return $ MonoEnv vars' cs
 
 lookupMonoVar :: VarB (Kinded Out) -> MonoEnv -> Maybe (Tagged Ty Typed)
 lookupMonoVar x = Map.lookup x . monoVarMap

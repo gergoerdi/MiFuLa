@@ -68,8 +68,8 @@ inferDefGroup defs = do
             let locals' = DefsGrouped []
 
             (body', τ :@ m) <- inferExpr body
-            let m' = removeMonoVars (Set.singleton x) m
-                def' = DefVar (bind x) locals' body'
+            m' <- removeMonoVars (Set.singleton x) m
+            let def' = DefVar (bind x) locals' body'
             return (x, def', τ :@ m')
         DefFun fun matches -> do
             (matches', tygs) <- unzip <$> mapM inferMatch matches
@@ -89,7 +89,7 @@ inferDefGroup defs = do
 
         (body', τBody :@ mBody) <- inferExpr body
         (θ, m, τ) <- unify (mBody:mPats) [foldr (tyArr loc) τBody τPats]
-        let m' = removeMonoVars (Set.unions $ map monoVars mPats) m
+        m' <- removeMonoVars (Set.unions $ map monoVars mPats) m
         pats'' <- θ ▷ pats'
         locals'' <- θ ▷ locals'
         body'' <- θ ▷ body'
@@ -139,7 +139,7 @@ unifyPoly :: [PolyEnv] -> TC (TySubst, PolyEnv)
 unifyPoly envs = do
     (θ, _, _) <- unify ms []
     let env = mconcat envs
-        env' = generalize vars env
+    env' <- generalize vars env
     env'' <- θ ▷ env'
     return (θ, env'')
   where
@@ -192,7 +192,7 @@ inferExpr_ (T loc expr) = case expr of
         (pat', τPat :@ mPat) <- inferPat pat
         (body', τBody :@ mBody) <- inferExpr body
         (θ, m, τ) <- unify [mPat, mBody] [tyArr loc τPat τBody]
-        let m' = removeMonoVars (monoVars mPat) m
+        m' <- removeMonoVars (monoVars mPat) m
         pat'' <- θ ▷ pat'
         body'' <- θ ▷ body'
         return (ELam pat'' body'', τ :@ m')

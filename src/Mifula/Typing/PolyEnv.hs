@@ -51,8 +51,7 @@ polyMonos = map (\(τ :@ m) -> m) . Map.elems . unPolyEnv
 lookupPolyVar :: VarB (Kinded Out) -> PolyEnv -> Maybe Typing
 lookupPolyVar var = Map.lookup var . unPolyEnv
 
-generalize :: Set (VarB (Kinded Out)) -> PolyEnv -> PolyEnv
-generalize vars = PolyEnv . fmap restrict . unPolyEnv
+generalize :: (MonadConstraint m) => Set (VarB (Kinded Out)) -> PolyEnv -> m PolyEnv
+generalize vars = liftM PolyEnv . mapM restrict . unPolyEnv
   where
-    restrict :: Typing -> Typing
-    restrict (τ :@ m) = τ :@ removeMonoVars vars m
+    restrict (τ :@ m) = liftM (τ :@) $ removeMonoVars vars m
