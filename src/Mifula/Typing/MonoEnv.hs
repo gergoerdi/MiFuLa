@@ -15,9 +15,10 @@ import qualified Data.Map as Map
 import Data.Set (Set)
 import qualified Data.Set as Set
 import Data.Monoid
-import Prelude hiding (foldr)
+import Prelude hiding (foldr, mapM)
 import Data.Foldable (foldMap, foldr)
-import Control.Monad (forM)
+import Data.Traversable (mapM)
+import Control.Monad (forM, liftM, liftM2)
 import Control.Applicative ((<$>))
 
 import Mifula.Syntax.Pretty ()
@@ -36,8 +37,8 @@ prettyTyping (τ :@ m)
       env <- prettyMonoEnv m
       return $ env <+> text "⊢" <+> pretty τ'
 
-instance SubstUVars Typing (Tv Typed) where
-    θ ▷ (τ :@ m) = (θ ▷ τ) :@ (θ ▷ m)
+instance (Monad m) => SubstUVars m Typing (Tv Typed) where
+    θ ▷ (τ :@ m) = liftM2 (:@) (θ ▷ τ) (θ ▷ m)
 
 instance HasUVars Typing (Tv Typed) where
     uvars (τ :@ m) = uvars τ <> uvars m
@@ -59,8 +60,8 @@ prettyMonoEnv m = do
     enclose = encloseSep lbrace rbrace comma
     prettyMono var τ = pretty var <+> text "∷" <+> pretty τ
 
-instance SubstUVars MonoEnv (Tv Typed) where
-    θ ▷ m = MonoEnv . fmap (θ ▷) . monoVarMap $ m
+instance (Monad m) => SubstUVars m MonoEnv (Tv Typed) where
+    θ ▷ m = liftM MonoEnv . mapM (θ ▷) . monoVarMap $ m
 
 instance HasUVars MonoEnv (Tv Typed) where
     uvars = foldMap uvars . monoVarMap

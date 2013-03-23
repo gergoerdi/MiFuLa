@@ -20,10 +20,10 @@ import Data.Foldable (foldlM)
 import Data.Set (Set)
 import qualified Data.Set as Set
 
-instantiate :: (HasUVars a (Tv Typed), SubstUVars a (Tv Typed)) => a -> TC a
+instantiate :: (HasUVars a (Tv Typed), SubstUVars TC a (Tv Typed)) => a -> TC a
 instantiate x = do
     θ <- foldlM generalize mempty $ uvars x
-    return $ θ ▷ x
+    θ ▷ x
   where
     generalize :: Subst (Tv Typed) -> Tv Typed -> TC (Subst (Tv Typed))
     generalize θ α =
@@ -53,7 +53,8 @@ inferDefGroup :: [Tagged Def (Kinded Out)] -> TC ([Tagged Def Typed], PolyEnv)
 inferDefGroup defs = do
     (defs', envs) <- unzip <$> mapM inferDef defs
     (θ, env) <- unifyPoly envs
-    return (θ ▷ defs', env)
+    defs'' <- θ ▷ defs'
+    return (defs'', env)
   where
     inferDef :: Tagged Def (Kinded Out) -> TC (Tagged Def Typed, PolyEnv)
     inferDef (T loc def) = do
@@ -74,7 +75,8 @@ inferDefGroup defs = do
             (matches', tygs) <- unzip <$> mapM inferMatch matches
             let (τs, ms) = unzip $ map (\ (τ :@ m) -> (τ, m)) tygs
             (θ, m, τ) <- unify ms τs
-            return (fun, DefFun (bind fun) (θ ▷ matches'), τ :@ m)
+            matches'' <- θ ▷ matches'
+            return (fun, DefFun (bind fun) matches'', τ :@ m)
 
     inferMatch :: Tagged Match (Kinded Out) -> TC (Tagged Match Typed, Typing)
     inferMatch (T loc (Match pats locals body)) = do
@@ -88,7 +90,10 @@ inferDefGroup defs = do
         (body', τBody :@ mBody) <- inferExpr body
         (θ, m, τ) <- unify (mBody:mPats) [foldr (tyArr loc) τBody τPats]
         let m' = removeMonoVars (Set.unions $ map monoVars mPats) m
-        return (T loc $ Match (θ ▷ pats') (θ ▷ locals') (θ ▷ body'), τ :@ m')
+        pats'' <- θ ▷ pats'
+        locals'' <- θ ▷ locals'
+        body'' <- θ ▷ body'
+        return (T loc $ Match pats'' locals'' body'', τ :@ m')
 
 inferExpr :: Tagged Expr (Kinded Out) -> TC (Tagged Expr Typed, Typing)
 inferExpr expr = do
@@ -103,7 +108,8 @@ type TyEq = UEq (Tagged Ty Typed)
 
 runUnify :: Bool -> [TyEq] -> TC TySubst
 runUnify allowFlip eqs = do
-    case unifyEqs True eqs of
+    result <- unifyEqs True eqs
+    case result of
         Left (eq, err) -> do
             error (show err) -- TODO: emit recoverable error
             return mempty
@@ -114,7 +120,9 @@ unify ms τs = do
     α <- freshTy
     let tyEqs = map (:~: α) τs
     θ <- runUnify True (tyEqs ++ varEqs)
-    return (θ, θ ▷ mconcat ms, θ ▷ α)
+    m <- θ ▷ mconcat ms
+    τ <- θ ▷ α
+    return (θ, m, τ)
   where
     varEqs :: [TyEq]
     varEqs = concatMap toEqs . Set.toList $ vars
@@ -132,7 +140,8 @@ unifyPoly envs = do
     (θ, _, _) <- unify ms []
     let env = mconcat envs
         env' = generalize vars env
-    return (θ, θ ▷ env')
+    env'' <- θ ▷ env'
+    return (θ, env'')
   where
     vars :: Set (VarB (Kinded Out))
     vars = mconcat . map polyVars $ envs
@@ -175,18 +184,25 @@ inferExpr_ (T loc expr) = case expr of
         (arg', τ₂ :@ m₂) <- inferExpr arg
         α <- freshTy
         (θ, m, _) <- unify [m₁, m₂] [τ₁, tyArr loc τ₂ α]
-        return (EApp (θ ▷ f') (θ ▷ arg'), (θ ▷ α) :@ m)
+        f'' <- θ ▷ f'
+        arg'' <- θ ▷ arg'
+        τ <- θ ▷ α
+        return (EApp f'' arg'', τ :@ m)
     ELam pat body -> do
         (pat', τPat :@ mPat) <- inferPat pat
         (body', τBody :@ mBody) <- inferExpr body
         (θ, m, τ) <- unify [mPat, mBody] [tyArr loc τPat τBody]
         let m' = removeMonoVars (monoVars mPat) m
-        return (ELam (θ ▷ pat') (θ ▷ body'), τ :@ m')
+        pat'' <- θ ▷ pat'
+        body'' <- θ ▷ body'
+        return (ELam pat'' body'', τ :@ m')
     ELet defs body -> do
         (defs', env) <- inferDefs defs
         (body', τBody :@ mBody) <- withEnv env $ inferExpr body
         (θ, m, τ) <- unify undefined undefined -- TODO
-        return (ELet (θ ▷ defs') (θ ▷ body'), τ :@ m)
+        defs'' <- θ ▷ defs'
+        body'' <- θ ▷ body'
+        return (ELet defs'' body'', τ :@ m)
 
 inferPat :: Tagged Pat (Kinded Out) -> TC (Tagged Pat Typed, Typing)
 inferPat (T loc pat) = case pat of
@@ -200,11 +216,12 @@ inferPat (T loc pat) = case pat of
         let ms = map (\(τ :@ m) -> m) tygs'
             τs = map (\(τ :@ m) -> τ) tygs' -- TODO: unzip...
         (θ, m, _) <- unify ms [τ, foldr (tyArr loc) α τs]
-        let τ' = θ ▷ α
+        τ' <- θ ▷ α
         case τ' of
             (T _ (TyApp (T _ (TyApp (T _ TyFun) _)) _)) -> undefined -- TODO: unsaturated constructor in pattern
             _ -> return ()
-        return (T (loc, τ') (θ ▷ PCon (ref con) pats'), τ' :@ m)
+        pat' <- θ ▷ PCon (ref con) pats'
+        return (T (loc, τ') pat', τ' :@ m)
     PWildcard -> do
         α <- freshTy
         return (T (loc, α) PWildcard, α :@ mempty)

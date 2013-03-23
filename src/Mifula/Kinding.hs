@@ -10,7 +10,7 @@ import Mifula.Kinding.KC
 import Mifula.Fresh
 import Mifula.Unify.UVar
 import Mifula.Unify.UEq
-import Control.Monad (forM)
+import Control.Monad (forM, (<=<))
 import Data.Map (Map)
 import qualified Data.Map as Map
 import Control.Arrow (second)
@@ -39,7 +39,7 @@ kindTyDefs tds = do
             td' <- kindTyDef td
             assert $ kindOf td' :~: α
             return td'
-    tds'' <- mapM (resolveKVars . (θ ▷)) tds'
+    tds'' <- mapM (resolveKVars <=< (θ ▷)) tds'
 
     let cons :: Map (ConB (Kinded Out)) (Tagged Ty (Kinded Out))
         cons = Map.fromList $ concatMap (consOf . unTag) tds''

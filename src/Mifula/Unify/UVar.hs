@@ -14,6 +14,8 @@ import qualified Data.Set as Set
 import Data.Map (Map)
 import qualified Data.Map as Map
 import Data.Monoid
+import Prelude hiding (mapM)
+import Data.Traversable (mapM)
 
 class Ord ξ => UVar ξ where
     type UTerm ξ
@@ -26,11 +28,11 @@ deriving instance (Show ξ, Show (UTerm ξ)) => Show (Subst ξ)
 class UVar ξ => HasUVars a ξ where
     uvars :: a -> Set ξ
 
-class UVar ξ => SubstUVars a ξ where
-    (▷) :: Subst ξ -> a -> a
+class (UVar ξ, Monad m) => SubstUVars m a ξ where
+    (▷) :: Subst ξ -> a -> m a
 
-instance SubstUVars a ξ => SubstUVars [a] ξ where
-    θ ▷ xs = map (θ ▷) xs
+instance SubstUVars m a ξ => SubstUVars m [a] ξ where
+    θ ▷ xs = mapM (θ ▷) xs
 
 occurs :: (HasUVars a ξ) => ξ -> a -> Bool
 occurs x ty = x `Set.member` uvars ty
@@ -45,5 +47,5 @@ contract α t θ | t `isVar` α = Just θ
     θ' = Subst $ Map.insert α t $ uvMap θ
 
 -- | Resolve the variable α into a term
-resolve :: (SubstUVars (UTerm ξ) ξ) => ξ -> Subst ξ -> Maybe (UTerm ξ)
-resolve α θ = fmap (θ ▷) $ Map.lookup α (uvMap θ)
+resolve :: (SubstUVars m (UTerm ξ) ξ) => ξ -> Subst ξ -> m (Maybe (UTerm ξ))
+resolve α θ = mapM (θ ▷) $ Map.lookup α (uvMap θ)

@@ -129,11 +129,11 @@ instance HasUVars (Kind In) Kv where
             KArr κ κ' -> go κ >> go κ'
             _ -> return ()
 
-instance SubstUVars (Kind In) Kv where
+instance (Monad m) => SubstUVars m (Kind In) Kv where
     θ ▷ κ = case κ of
-        KStar -> κ
-        KArr κ κ' -> KArr (θ ▷ κ) (θ ▷ κ')
-        KVar α -> KVar α `fromMaybe` resolve α θ
+        KStar -> return κ
+        KArr κ κ' -> liftM2 KArr (θ ▷ κ) (θ ▷ κ')
+        KVar α -> liftM (fromMaybe $ KVar α) $ resolve α θ
 
 data Tv (π :: Pass) where
     TvNamed :: Binding NSTv π -> Tv π
@@ -168,20 +168,23 @@ instance HasUVars (Ty π) (Tv π) where
 instance HasUVars (Tagged Ty π) (Tv π) where
     uvars = uvars . unTag
 
-instance SubstUVars (Tagged Ty (Kinded In)) Kv where
-    θ ▷ (T (mloc, κ) τ) = T (mloc, θ ▷ κ) $ θ ▷ τ
+instance (Monad m) => SubstUVars m (Tagged Ty (Kinded In)) Kv where
+    θ ▷ (T (mloc, κ) τ) = do
+        κ' <- θ ▷ κ
+        τ' <- θ ▷ τ
+        return $ T (mloc, κ') τ'
 
-instance SubstUVars (Ty (Kinded In)) Kv where
+instance (Monad m) => SubstUVars m (Ty (Kinded In)) Kv where
     θ ▷ τ = case τ of
-        TyApp t u -> TyApp (θ ▷ t) (θ ▷ u)
-        _ -> τ
+        TyApp t u -> liftM2 TyApp (θ ▷ t) (θ ▷ u)
+        _ -> return τ
 
-instance SubstUVars (Tagged Ty Typed) (Tv Typed) where
+instance (Monad m) => SubstUVars m (Tagged Ty Typed) (Tv Typed) where
     θ ▷ tτ = case unTag tτ of
-        TyCon con -> tτ
-        TyVar α -> tτ `fromMaybe` resolve α θ
-        TyApp tt tu -> T (tag tτ) $ TyApp (θ ▷ tt) (θ ▷ tu)
-        TyFun -> tτ
+        TyCon con -> return tτ
+        TyVar α -> liftM (fromMaybe tτ) $ resolve α θ
+        TyApp tt tu -> liftM (T (tag tτ)) $ liftM2 TyApp (θ ▷ tt) (θ ▷ tu)
+        TyFun -> return tτ
 
 type family ScopedPass (π :: Pass) :: Bool
 type instance ScopedPass Parsed = False
@@ -202,37 +205,46 @@ data TyDef π = TDAlias (TyConB π) [Binding NSTv π] (Tagged Ty π) -- TODO: ta
              | TDData (TyConB π) [Binding NSTv π] [Tagged ConDef π]
 deriving instance (Show (Tag Ty π), Show (Tag ConDef π)) => Show (TyDef π)
 
-instance SubstUVars (Tagged TyDef (Kinded In)) Kv where
-    θ ▷ (T (mloc, κ) td) = T (mloc, θ ▷ κ) $ θ ▷ td
+instance (Monad m) => SubstUVars m (Tagged TyDef (Kinded In)) Kv where
+    θ ▷ (T (mloc, κ) td) = do
+        κ' <- θ ▷ κ
+        td' <- θ ▷ td
+        return $ T (mloc, κ') td'
 
-instance SubstUVars (TyDef (Kinded In)) Kv where
+instance (Monad m) => SubstUVars m (TyDef (Kinded In)) Kv where
     θ ▷ td = case td of
-        TDAlias name tvs τ -> TDAlias name tvs (θ ▷ τ)
-        TDData name tvs cons -> TDData name tvs (θ ▷ cons)
+        TDAlias name tvs τ -> liftM (TDAlias name tvs) (θ ▷ τ)
+        TDData name tvs cons -> liftM (TDData name tvs) (θ ▷ cons)
 
 data ConDef π = ConDef (ConB π) [Tagged Ty π]
 deriving instance (Show (Tag Ty π)) => Show (ConDef π)
 
-instance SubstUVars (Tagged ConDef (Kinded In)) Kv where
-    θ ▷ (T (loc, τ) con) = T (loc, θ ▷ τ) (θ ▷ con)
+instance (Monad m) => SubstUVars m (Tagged ConDef (Kinded In)) Kv where
+    θ ▷ (T (loc, τ) con) = do
+        τ' <- θ ▷ τ
+        con' <- θ ▷ con
+        return $ T (loc, τ') con'
 
-instance SubstUVars (ConDef (Kinded In)) Kv where
-    θ ▷ (ConDef name τs) = ConDef name $ θ ▷ τs
+instance (Monad m) => SubstUVars m (ConDef (Kinded In)) Kv where
+    θ ▷ (ConDef name τs) = liftM (ConDef name) $ θ ▷ τs
 
-instance SubstUVars (Defs Typed) (Tv Typed) where
-    θ ▷ (DefsGrouped defss) = DefsGrouped (θ ▷ defss)
+instance (Monad m) => SubstUVars m (Defs Typed) (Tv Typed) where
+    θ ▷ (DefsGrouped defss) = liftM DefsGrouped (θ ▷ defss)
 
 data Def π = DefVar (VarB π) (Defs π) (Tagged Expr π)
            | DefFun (VarB π) [Tagged Match π]
 deriving instance (Show (Defs π), Show (Tag Def π), Show (Tag Expr π), Show (Tag Pat π), Show (Tag Match π)) => Show (Def π)
 
-instance SubstUVars (Def Typed) (Tv Typed) where
+instance (Monad m) => SubstUVars m (Def Typed) (Tv Typed) where
     θ ▷ def = case def of
-        DefVar var locals body -> DefVar var (θ ▷ locals) (θ ▷ body)
-        DefFun fun matches -> DefFun fun (θ ▷ matches)
+        DefVar var locals body -> liftM2 (DefVar var) (θ ▷ locals) (θ ▷ body)
+        DefFun fun matches -> liftM (DefFun fun) (θ ▷ matches)
 
-instance SubstUVars (Tagged Def Typed) (Tv Typed) where
-    θ ▷ (T (loc, τ) def) = T (loc, θ ▷ τ) $ θ ▷ def
+instance (Monad m) => SubstUVars m (Tagged Def Typed) (Tv Typed) where
+    θ ▷ (T (loc, τ) def) = do
+        τ' <- θ ▷ τ
+        def' <- θ ▷ def
+        return $ T (loc, τ') def'
 
 defName :: Def π -> VarB π
 defName (DefVar x _ _) = x
@@ -241,25 +253,28 @@ defName (DefFun fun _) = fun
 data Match π = Match [Tagged Pat π] (Defs π) (Tagged Expr π)
 deriving instance (Show (Tag Match π), Show (Tag Pat π), Show (Tag Expr π), Show (Defs π), Show (Tag Def π)) => Show (Match π)
 
-instance SubstUVars (Match Typed) (Tv Typed) where
-    θ ▷ Match pats locals body = Match (θ ▷ pats) (θ ▷ locals) (θ ▷ body)
+instance (Monad m) => SubstUVars m (Match Typed) (Tv Typed) where
+    θ ▷ Match pats locals body = liftM3 Match (θ ▷ pats) (θ ▷ locals) (θ ▷ body)
 
-instance SubstUVars (Tagged Match Typed) (Tv Typed) where
-    θ ▷ (T loc def) = T loc $ θ ▷ def
+instance (Monad m) => SubstUVars m (Tagged Match Typed) (Tv Typed) where
+    θ ▷ (T loc def) = liftM (T loc) (θ ▷ def)
 
 data Pat π = PVar (VarB π)
            | PCon (Con π) [Tagged Pat π]
            | PWildcard
 deriving instance Show (Tag Pat π) => Show (Pat π)
 
-instance SubstUVars (Pat Typed) (Tv Typed) where
+instance (Monad m) => SubstUVars m (Pat Typed) (Tv Typed) where
     θ ▷ pat = case pat of
-        PVar _ -> pat
-        PCon con pats -> PCon con (θ ▷ pats)
-        PWildcard -> pat
+        PVar _ -> return pat
+        PCon con pats -> liftM (PCon con) (θ ▷ pats)
+        PWildcard -> return pat
 
-instance SubstUVars (Tagged Pat Typed) (Tv Typed) where
-    θ ▷ (T (loc, τ) pat) = T (loc, θ ▷ τ) (θ ▷ pat)
+instance (Monad m) => SubstUVars m (Tagged Pat Typed) (Tv Typed) where
+    θ ▷ (T (loc, τ) pat) = do
+        τ' <- θ ▷ τ
+        pat' <- θ ▷ pat
+        return $ T (loc, τ') pat'
 
 data Lit = LInt Integer
          deriving Show
@@ -272,16 +287,19 @@ data Expr π = EVar (Var π)
             | ELet (Defs π) (Tagged Expr π)
 deriving instance (Show (Tag Expr π), Show (Tag Pat π), Show (Defs π), Show (Tag Def π), Show (Tag Match π)) => Show (Expr π)
 
-instance SubstUVars (Expr Typed) (Tv Typed) where
+instance (Monad m) => SubstUVars m (Expr Typed) (Tv Typed) where
     θ ▷ e = case e of
-        EVar _ -> e
-        ECon _ -> e
-        ELam pat body -> ELam (θ ▷ pat) (θ ▷ body)
-        EApp f x -> EApp (θ ▷ f) (θ ▷ x)
-        ELet defs body -> ELet (θ ▷ defs) (θ ▷ body)
+        EVar _ -> return e
+        ECon _ -> return e
+        ELam pat body -> liftM2 ELam (θ ▷ pat) (θ ▷ body)
+        EApp f x -> liftM2 EApp (θ ▷ f) (θ ▷ x)
+        ELet defs body -> liftM2 ELet (θ ▷ defs) (θ ▷ body)
 
-instance SubstUVars (Tagged Expr Typed) (Tv Typed) where
-    θ ▷ (T (loc, τ) e) = T (loc, θ ▷ τ) (θ ▷ e)
+instance (Monad m) => SubstUVars m (Tagged Expr Typed) (Tv Typed) where
+    θ ▷ (T (loc, τ) e) = do
+        τ' <- θ ▷ τ
+        e' <- θ ▷ e
+        return $ T (loc, τ') e'
 
 noPos :: SourcePos
 noPos = initialPos ""

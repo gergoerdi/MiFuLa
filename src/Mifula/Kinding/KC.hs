@@ -87,6 +87,7 @@ internalError s = error $ unwords ["Internal error:", s]
 unified :: KC a -> KC (a, Subst Kv)
 unified m = do
     (x, eqs) <- KC . censor (const mempty) . listen . unKC $ m
-    case unifyEqs True eqs of
+    result <- unifyEqs True eqs
+    case result of
         Left (eq, err) -> KC . lift . left $ err
         Right θ -> return (x, θ)

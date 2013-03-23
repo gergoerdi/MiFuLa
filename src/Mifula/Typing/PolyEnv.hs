@@ -16,6 +16,9 @@ import Data.Map (Map)
 import qualified Data.Map as Map
 import Data.Set (Set)
 import Data.Monoid
+import Prelude hiding (mapM)
+import Data.Traversable (mapM)
+import Control.Monad (liftM)
 
 import Mifula.Syntax.Pretty ()
 import Text.PrettyPrint.Leijen hiding ((<$>))
@@ -27,8 +30,8 @@ import Text.PrettyPrint.Leijen hiding ((<$>))
 newtype PolyEnv = PolyEnv{ unPolyEnv :: Map (VarB (Kinded Out)) Typing }
                 deriving (Show, Monoid)
 
-instance SubstUVars PolyEnv (Tv Typed) where
-    θ ▷ env = PolyEnv . fmap (θ ▷) . unPolyEnv $ env
+instance (Monad m) => SubstUVars m PolyEnv (Tv Typed) where
+    θ ▷ env = liftM PolyEnv . mapM (θ ▷) . unPolyEnv $ env
 
 instance Pretty PolyEnv where
     pretty = vcat . map (uncurry var) . Map.toList . unPolyEnv
