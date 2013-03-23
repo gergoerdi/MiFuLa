@@ -11,6 +11,7 @@ module Mifula.Typing.PolyEnv
 import Mifula.Syntax
 import Mifula.Syntax.Readable
 import Mifula.Unify.UVar
+import Mifula.Typing.Constraint
 import Mifula.Typing.MonoEnv
 import Data.Map (Map)
 import qualified Data.Map as Map
@@ -30,7 +31,7 @@ import Text.PrettyPrint.Leijen hiding ((<$>))
 newtype PolyEnv = PolyEnv{ unPolyEnv :: Map (VarB (Kinded Out)) Typing }
                 deriving (Show, Monoid)
 
-instance (Monad m) => SubstUVars m PolyEnv (Tv Typed) where
+instance (MonadConstraint m) => SubstUVars m PolyEnv (Tv Typed) where
     θ ▷ env = liftM PolyEnv . mapM (θ ▷) . unPolyEnv $ env
 
 instance Pretty PolyEnv where

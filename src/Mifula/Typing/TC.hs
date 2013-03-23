@@ -7,6 +7,7 @@ module Mifula.Typing.TC where
 import Mifula.Fresh
 import Mifula.Syntax
 import Mifula.Prims
+import Mifula.Typing.Constraint
 import Mifula.Typing.MonoEnv
 import Mifula.Typing.PolyEnv
 import Control.Applicative
@@ -26,6 +27,8 @@ newtype TC a = TC{ unTC :: ReaderT R SupplyId a }
 
 instance MonadFresh (Tv Typed) TC where
     fresh = TvFresh <$> (TC . lift $ fresh)
+
+instance MonadConstraint TC where
 
 runTC :: Map (ConB (Kinded Out)) (Tagged Ty (Kinded Out))
       -> PolyEnv

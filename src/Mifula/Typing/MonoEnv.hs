@@ -10,6 +10,7 @@ module Mifula.Typing.MonoEnv
 
 import Mifula.Syntax
 import Mifula.Unify.UVar
+import Mifula.Typing.Constraint
 import Data.Map (Map)
 import qualified Data.Map as Map
 import Data.Set (Set)
@@ -37,7 +38,7 @@ prettyTyping (τ :@ m)
       env <- prettyMonoEnv m
       return $ env <+> text "⊢" <+> pretty τ'
 
-instance (Monad m) => SubstUVars m Typing (Tv Typed) where
+instance (MonadConstraint m) => SubstUVars m Typing (Tv Typed) where
     θ ▷ (τ :@ m) = liftM2 (:@) (θ ▷ τ) (θ ▷ m)
 
 instance HasUVars Typing (Tv Typed) where
@@ -47,8 +48,14 @@ instance HasUVars Typing (Tv Typed) where
 -- should never be `PrimRef`s).
 -- However, this would cause problems with trying to print a
 -- `MonoEnv`, since we need string names there.
-newtype MonoEnv = MonoEnv{ monoVarMap :: Map (VarB (Kinded Out)) (Tagged Ty Typed) }
-                deriving (Monoid, Show)
+data MonoEnv = MonoEnv{ monoVarMap :: Map (VarB (Kinded Out)) (Tagged Ty Typed)
+                      , monoConstraints :: Constraints
+                      }
+             deriving (Show)
+
+instance Monoid MonoEnv where
+    mempty = MonoEnv mempty mempty
+    (MonoEnv vars cs) `mappend` (MonoEnv vars' cs') = MonoEnv (vars <> vars') (cs <> cs')
 
 prettyMonoEnv :: MonoEnv -> Readable Doc
 prettyMonoEnv m = do
@@ -60,8 +67,8 @@ prettyMonoEnv m = do
     enclose = encloseSep lbrace rbrace comma
     prettyMono var τ = pretty var <+> text "∷" <+> pretty τ
 
-instance (Monad m) => SubstUVars m MonoEnv (Tv Typed) where
-    θ ▷ m = liftM MonoEnv . mapM (θ ▷) . monoVarMap $ m
+instance (MonadConstraint m) => SubstUVars m MonoEnv (Tv Typed) where
+    θ ▷ m = liftM2 MonoEnv (mapM (θ ▷) $ monoVarMap m) (θ ▷ monoConstraints m)
 
 instance HasUVars MonoEnv (Tv Typed) where
     uvars = foldMap uvars . monoVarMap
@@ -69,13 +76,13 @@ instance HasUVars MonoEnv (Tv Typed) where
 monoVar :: VarB (Kinded Out) -> Tagged Ty Typed -> Typing
 monoVar x τ = τ :@ m
   where
-    m = MonoEnv $ Map.singleton x τ
+    m = MonoEnv (Map.singleton x τ) mempty
 
 monoVars :: MonoEnv -> Set (VarB (Kinded Out))
 monoVars = Map.keysSet . monoVarMap
 
 removeMonoVars :: Set (VarB (Kinded Out)) -> MonoEnv -> MonoEnv
-removeMonoVars xs = MonoEnv . (foldr Map.delete `flip` xs) . monoVarMap
+removeMonoVars xs (MonoEnv vars cs) = MonoEnv (foldr Map.delete vars xs) cs
 
 lookupMonoVar :: VarB (Kinded Out) -> MonoEnv -> Maybe (Tagged Ty Typed)
 lookupMonoVar x = Map.lookup x . monoVarMap
