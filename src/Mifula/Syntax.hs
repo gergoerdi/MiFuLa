@@ -291,6 +291,7 @@ instance (Monad m) => SubstUVars m (Expr Typed) (Tv Typed) where
     θ ▷ e = case e of
         EVar _ -> return e
         ECon _ -> return e
+        ELit _ -> return e
         ELam pat body -> liftM2 ELam (θ ▷ pat) (θ ▷ body)
         EApp f x -> liftM2 EApp (θ ▷ f) (θ ▷ x)
         ELet defs body -> liftM2 ELet (θ ▷ defs) (θ ▷ body)
