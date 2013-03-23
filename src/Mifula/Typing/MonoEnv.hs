@@ -84,6 +84,7 @@ monoVars = Map.keysSet . monoVarMap
 removeMonoVars :: (MonadConstraint m) => Set (VarB (Kinded Out)) -> MonoEnv -> m MonoEnv
 removeMonoVars xs (MonoEnv vars cs) = do
     let vars' = foldr Map.delete vars xs
+    -- TODO: check ambiguity in remaining constraints
     return $ MonoEnv vars' cs
 
 lookupMonoVar :: VarB (Kinded Out) -> MonoEnv -> Maybe (Tagged Ty Typed)
