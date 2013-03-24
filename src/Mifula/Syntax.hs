@@ -65,6 +65,7 @@ deriving instance (AST a, Show (Tag a π), Show (a π)) => Show (Tagged a π)
 data PrimId :: Namespace -> * where
     PrimPlus :: PrimId NSVar
     PrimInt :: PrimId NSTyCon
+    PrimNum :: PrimId NSClass
 
 deriving instance Show (PrimId ns)
 deriving instance Eq (PrimId ns)

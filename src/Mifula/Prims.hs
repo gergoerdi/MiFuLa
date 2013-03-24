@@ -28,6 +28,9 @@ instance Prim NSCon where
 instance Prim NSTyCon where
     nameBimap = Bimap.fromList [("Int", PrimInt)]
 
+instance Prim NSClass where
+    nameBimap = Bimap.fromList [("Num", PrimNum)]
+
 primTyConKind :: PrimId NSTyCon -> Kind Out
 primTyConKind p = case p of
     PrimInt -> KStar
