@@ -3,7 +3,7 @@
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
 module Mifula.Typing.MonoEnv
        ( Typing(..), MonoEnv
-       , prettyTyping, prettyMonoEnv
+       , prettyTyping
        , monoVar, monoVars
        , removeMonoVars, lookupMonoVar
        ) where
@@ -32,12 +32,14 @@ data Typing = Tagged Ty Typed :@ MonoEnv
             deriving Show
 
 prettyTyping :: Typing -> Readable Doc
-prettyTyping (τ :@ m)
-  | Set.null (monoVars m) = pretty <$> readableTyT τ
-  | otherwise = do
-      τ' <- readableTyT τ
-      env <- prettyMonoEnv m
-      return $ env <+> text "⊢" <+> pretty τ'
+prettyTyping (τ :@ m) = do
+    ctxt <- prettyMonoConstraints m
+    vars <- prettyMonoVars m
+    τ' <- readableTyT τ
+    return $ maybe id prependCtxt ctxt $ maybe id prependVars vars $ pretty τ'
+  where
+    prependCtxt ctxt d = ctxt <+> text "⇒" <+> d
+    prependVars vars d = vars <+> text "⊢" <+> d
 
 instance (MonadConstraint m) => SubstUVars m Typing (Tv Typed) where
     θ ▷ (τ :@ m) = liftM2 (:@) (θ ▷ τ) (θ ▷ m)
@@ -58,15 +60,20 @@ instance Monoid MonoEnv where
     mempty = MonoEnv mempty mempty
     (MonoEnv vars cs) `mappend` (MonoEnv vars' cs') = MonoEnv (vars <> vars') (cs <> cs')
 
-prettyMonoEnv :: MonoEnv -> Readable Doc
-prettyMonoEnv m = do
-    vars <- forM (Map.toList . monoVarMap $ m) $ \(var, τ) -> do
-        τ' <- readableTyT τ
-        return (var, τ')
-    return $ enclose . map (uncurry prettyMono) $ vars
+prettyMonoVars :: MonoEnv -> Readable (Maybe Doc)
+prettyMonoVars m
+  | Set.null (monoVars m) = return Nothing
+  | otherwise = do
+      vars <- forM (Map.toList . monoVarMap $ m) $ \(var, τ) -> do
+          τ' <- readableTyT τ
+          return (var, τ')
+      return . Just $ enclose . map (uncurry prettyMono) $ vars
   where
     enclose = encloseSep lbrace rbrace comma
     prettyMono var τ = pretty var <+> text "∷" <+> pretty τ
+
+prettyMonoConstraints :: MonoEnv -> Readable (Maybe Doc)
+prettyMonoConstraints m = prettyConstraints (monoConstraints m)
 
 instance (MonadConstraint m) => SubstUVars m MonoEnv (Tv Typed) where
     θ ▷ m = liftM2 MonoEnv (mapM (θ ▷) $ monoVarMap m) (θ ▷ monoConstraints m)

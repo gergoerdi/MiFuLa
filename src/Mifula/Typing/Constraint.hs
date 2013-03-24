@@ -7,6 +7,7 @@ module Mifula.Typing.Constraint
        ( MonadConstraint(..)
        , Constraint(..)
        , Constraints(Constraints), allConstraints
+       , prettyConstraint, prettyConstraints
        ) where
 
 import Mifula.Syntax
@@ -14,6 +15,11 @@ import Mifula.Unify.UVar
 import Control.Monad (liftM, (<=<))
 import Data.Monoid
 import Data.Foldable (foldMap)
+import Control.Applicative
+
+import Mifula.Syntax.Readable
+import Mifula.Syntax.Pretty ()
+import Text.PrettyPrint.Leijen hiding ((<$>), (<>))
 
 type family ConstraintSubject (dir :: InOut) :: *
 type instance ConstraintSubject In = Tagged Ty Typed
@@ -51,4 +57,17 @@ instance (MonadConstraint m) => SubstUVars m (Constraints Out) (Tv Typed) where
 
 instance HasUVars (Constraints Out) (Tv Typed) where
     uvars = foldMap uvars . allConstraints
+
+prettyConstraint :: Constraint Out -> Readable Doc
+prettyConstraint c = case c of
+    ClassC cls (κ, α) -> do
+        TvNamed α' <- readableTv α
+        return $ pretty cls <+> pretty α'
+
+prettyConstraints :: Constraints Out -> Readable (Maybe Doc)
+prettyConstraints constraints = case allConstraints constraints of
+    [] -> return Nothing
+    cs -> Just . enclose <$> mapM prettyConstraint cs
+  where
+    enclose = encloseSep lparen rparen comma
 
