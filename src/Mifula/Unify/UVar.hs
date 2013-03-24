@@ -1,6 +1,6 @@
 {-# LANGUAGE DataKinds #-}
 {-# LANGUAGE FlexibleInstances, FlexibleContexts, UndecidableInstances #-}
-{-# LANGUAGE MultiParamTypeClasses, TypeFamilies #-}
+{-# LANGUAGE MultiParamTypeClasses, TypeFamilies, FunctionalDependencies #-}
 {-# LANGUAGE GeneralizedNewtypeDeriving, StandaloneDeriving #-}
 module Mifula.Unify.UVar
        ( Subst
@@ -25,7 +25,7 @@ newtype Subst ξ = Subst{ uvMap :: Map ξ (UTerm ξ) }
                   deriving Monoid
 deriving instance (Show ξ, Show (UTerm ξ)) => Show (Subst ξ)
 
-class UVar ξ => HasUVars a ξ where
+class UVar ξ => HasUVars a ξ | a -> ξ where
     uvars :: a -> Set ξ
 
 class (UVar ξ, Monad m) => SubstUVars m a ξ where
