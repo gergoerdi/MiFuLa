@@ -27,15 +27,16 @@ decls = parseD prog
   where
     prog = unlines [ "data List a = Nil | Cons a (List a)"
                    , ""
-                   , "id x = x"
-                   , "id' = id (λ x → x)"
-                   , "const x _ = x"
-                   , "map f (Cons x xs) = Cons (f x) (mup f xs)"
-                   , "map f Nil = Nil"
-                   , "mapConst = map const"
-                   , "mapSucc = map (plus 1)"
-                   , "mup f (Cons x xs) = Cons (f x) (map f xs)"
-                   , "mup f Nil = Nil"
+                   -- , "id x = x"
+                   -- , "id' = id (λ x → x)"
+                   -- , "const x _ = x"
+                   -- , "map f (Cons x xs) = Cons (f x) (mup f xs)"
+                   -- , "map f Nil = Nil"
+                   -- , "mapConst = map const"
+                   -- -- , "mapSucc = map (plus 1)"
+                   -- , "mup f (Cons x xs) = Cons (f x) (map f xs)"
+                   -- , "mup f Nil = Nil"
+                   , "one = 1"
                    ]
 
     parseD s = case IP.parse program "" s of

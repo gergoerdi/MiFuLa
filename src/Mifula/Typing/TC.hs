@@ -30,6 +30,8 @@ instance MonadFresh (Tv Typed) TC where
 
 instance MonadConstraint TC where
     resolveConstraint c = case c of
+        -- TODO: This is for testing only...
+        ClassC cls (T _ (TyVar α)) -> return $ Constraints [ClassC cls (undefined, α)]
         ClassC cls τ -> error $ unwords ["Unimplemented:","resolveConstraint", show c]
 
 runTC :: Map (ConB (Kinded Out)) (Tagged Ty (Kinded Out))
