@@ -7,7 +7,7 @@ module Mifula.Typing.Constraint
        ( MonadConstraint(..)
        , Cls
        , Constraint(..)
-       , Constraints, allConstraints
+       , Constraints(Constraints), allConstraints
        ) where
 
 import Mifula.Syntax

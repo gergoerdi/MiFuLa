@@ -29,6 +29,8 @@ instance MonadFresh (Tv Typed) TC where
     fresh = TvFresh <$> (TC . lift $ fresh)
 
 instance MonadConstraint TC where
+    resolveConstraint c = case c of
+        ClassC cls τ -> error $ unwords ["Unimplemented:","resolveConstraint", show c]
 
 runTC :: Map (ConB (Kinded Out)) (Tagged Ty (Kinded Out))
       -> PolyEnv
