@@ -155,10 +155,13 @@ instance UVar (Tv π) where
         TyVar β -> β == α
         _ -> False
 
+instance HasUVars (Tv π) (Tv π) where
+    uvars = Set.singleton
+
 instance HasUVars (Ty π) (Tv π) where
     uvars = execWriter . go
       where
-        collect = tell . Set.singleton
+        collect = tell . uvars
 
         go τ = case τ of
             TyVar α -> collect α
