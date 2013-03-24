@@ -5,7 +5,6 @@
 {-# LANGUAGE TypeFamilies #-}
 module Mifula.Typing.Constraint
        ( MonadConstraint(..)
-       , Cls
        , Constraint(..)
        , Constraints(Constraints), allConstraints
        ) where
@@ -16,12 +15,11 @@ import Control.Monad (liftM, (<=<))
 import Data.Monoid
 import Data.Foldable (foldMap)
 
-type Cls = TyCon
 type family ConstraintSubject (dir :: InOut) :: *
 type instance ConstraintSubject In = Tagged Ty Typed
 type instance ConstraintSubject Out = (Kind Out, Tv Typed)
 
-data Constraint (dir :: InOut) = ClassC (Cls Typed) (ConstraintSubject dir)
+data Constraint (dir :: InOut) = ClassC (Class Typed) (ConstraintSubject dir)
 deriving instance (Show (Constraint In))
 deriving instance (Show (Constraint Out))
 

@@ -10,7 +10,7 @@ module Mifula.Syntax
        ( Pass(..), ScopedPass
        , AST(..), Tagged(..)
        , Id, PrimId(..), Binding(..), Namespace(..)
-       , Ref(..), Var, Con, TyCon
+       , Ref(..), Var, Con, TyCon, Class
        , VarB, ConB, TyConB
        , Ty(..), Tv(..)
        , Kv, InOut(..), Kind(..)
@@ -70,12 +70,13 @@ deriving instance Show (PrimId ns)
 deriving instance Eq (PrimId ns)
 deriving instance Ord (PrimId ns)
 
-data Namespace = NSVar | NSCon | NSTv | NSTyCon
+data Namespace = NSVar | NSCon | NSTv | NSTyCon | NSClass
                deriving (Eq, Show)
 
 type Var = Ref NSVar
 type Con = Ref NSCon
 type TyCon = Ref NSTyCon
+type Class = Ref NSClass
 
 type VarB = Binding NSVar
 type ConB = Binding NSCon
