@@ -15,11 +15,12 @@ import Data.Map (Map)
 import qualified Data.Map as Map
 import Data.Set (Set)
 import qualified Data.Set as Set
+import Data.Set.Unicode ((⊆))
 import Data.Monoid
 import Prelude hiding (foldr, mapM)
 import Data.Foldable (foldMap, foldr)
 import Data.Traversable (mapM)
-import Control.Monad (forM, liftM, liftM2)
+import Control.Monad (forM, liftM, liftM2, unless)
 import Control.Applicative ((<$>))
 
 import Mifula.Syntax.Pretty ()
@@ -49,7 +50,7 @@ instance HasUVars Typing (Tv Typed) where
 -- However, this would cause problems with trying to print a
 -- `MonoEnv`, since we need string names there.
 data MonoEnv = MonoEnv{ monoVarMap :: Map (VarB (Kinded Out)) (Tagged Ty Typed)
-                      , monoConstraints :: Constraints
+                      , monoConstraints :: Constraints Out
                       }
              deriving (Show)
 
@@ -84,7 +85,9 @@ monoVars = Map.keysSet . monoVarMap
 removeMonoVars :: (MonadConstraint m) => Set (VarB (Kinded Out)) -> MonoEnv -> m MonoEnv
 removeMonoVars xs (MonoEnv vars cs) = do
     let vars' = foldr Map.delete vars xs
-    -- TODO: check ambiguity in remaining constraints
+    unless (uvars cs ⊆ foldMap uvars vars') $
+      -- TODO: proper error reporting
+      error "Amigbuous constraint"
     return $ MonoEnv vars' cs
 
 lookupMonoVar :: VarB (Kinded Out) -> MonoEnv -> Maybe (Tagged Ty Typed)
