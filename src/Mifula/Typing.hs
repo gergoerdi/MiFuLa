@@ -5,6 +5,7 @@ module Mifula.Typing (inferDefs) where
 import Mifula.Typing.MonoEnv
 import Mifula.Typing.PolyEnv
 import Mifula.Typing.TC
+import Mifula.Typing.Constraint
 import Mifula.Unify.UVar
 import Mifula.Unify.UEq
 import Mifula.Unify
@@ -176,8 +177,8 @@ inferExpr_ (T loc expr) = case expr of
         tyg' <- instantiate tyg
         return (ECon (ref c), tyg')
     ELit lit -> do
-        τ <- T (Just loc, KStar) <$> inferLit lit
-        let tyg = τ :@ mempty
+        (ctxt, τ) <- inferLit lit
+        let tyg = overloadedTy ctxt (T (Just loc, KStar) τ)
         return (ELit lit, tyg)
     EApp f arg -> do
         (f', τ₁ :@ m₁) <- inferExpr f
@@ -226,5 +227,7 @@ inferPat (T loc pat) = case pat of
         α <- freshTy
         return (T (loc, α) PWildcard, α :@ mempty)
 
-inferLit :: Lit -> TC (Ty Typed)
-inferLit (LInt _) = return $ TyCon $ PrimRef PrimInt
+inferLit :: Lit -> TC ([Constraint Out], Ty Typed)
+inferLit (LInt _) = do
+    α <- fresh
+    return ([ClassC (PrimRef PrimNum) (KStar, α)], TyVar α)

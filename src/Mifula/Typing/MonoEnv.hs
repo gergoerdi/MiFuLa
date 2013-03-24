@@ -5,6 +5,7 @@ module Mifula.Typing.MonoEnv
        ( Typing(..), MonoEnv
        , prettyTyping
        , monoVar, monoVars
+       , overloadedTy
        , removeMonoVars, lookupMonoVar
        ) where
 
@@ -85,6 +86,11 @@ monoVar :: VarB (Kinded Out) -> Tagged Ty Typed -> Typing
 monoVar x τ = τ :@ m
   where
     m = MonoEnv (Map.singleton x τ) mempty
+
+overloadedTy :: [Constraint Out] -> Tagged Ty Typed -> Typing
+overloadedTy ctxt τ = τ :@ m
+  where
+    m = MonoEnv mempty $ Constraints ctxt
 
 monoVars :: MonoEnv -> Set (VarB (Kinded Out))
 monoVars = Map.keysSet . monoVarMap
